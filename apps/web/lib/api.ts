@@ -1,4 +1,5 @@
 import axios from "axios";
+import { refreshSocketAuth } from "@/lib/socket";
 
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_BASE || "http://localhost:3000",
@@ -11,6 +12,8 @@ export function setToken(token: string | null) {
   if (token) localStorage.setItem(TOKEN_KEY, token);
   else localStorage.removeItem(TOKEN_KEY);
   api.defaults.headers.common.Authorization = token ? `Bearer ${token}` : "";
+
+  refreshSocketAuth(token);
 }
 
 export function getToken() {

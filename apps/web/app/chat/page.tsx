@@ -20,6 +20,7 @@ type Message = {
   author: { id: string; displayName: string };
 };
 type Me = { sub: string; email: string; displayName: string };
+type OnlineUser = { id: string; displayName: string };
 
 export default function ChatPage() {
   const router = useRouter();
@@ -31,10 +32,13 @@ export default function ChatPage() {
   const [newChannel, setNewChannel] = useState("");
   const [creating, setCreating] = useState(false);
 
-  // userId -> { name, ts }
+  // typing: userId -> { name, ts }
   const [typing, setTyping] = useState<
     Record<string, { name: string; ts: number }>
   >({});
+  // presence: list of online users
+  const [online, setOnline] = useState<OnlineUser[]>([]);
+
   const listRef = useRef<HTMLDivElement | null>(null);
   const stopTypingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -71,7 +75,15 @@ export default function ChatPage() {
 
   // Realtime: messages
   useEffect(() => {
-    const s = getSocket();
+    // wait for user (token) and catch missing token
+    if (!active || !user) return;
+    let s;
+    try {
+      s = getSocket();
+    } catch {
+      return; // no token yet, try again later
+    }
+
     const onCreated = (payload: any) => {
       if (payload?.channelId !== active) return;
 
@@ -98,11 +110,17 @@ export default function ChatPage() {
     return () => {
       s.off("message.created", onCreated);
     };
-  }, [active]);
+  }, [active, user]);
 
   // Realtime: typing (store names + timestamps)
   useEffect(() => {
-    const s = getSocket();
+    if (!active || !user) return;
+    let s;
+    try {
+      s = getSocket();
+    } catch {
+      return;
+    }
 
     const onTyping = (p: {
       channelId: string;
@@ -111,7 +129,7 @@ export default function ChatPage() {
       isTyping: boolean;
     }) => {
       if (p.channelId !== active) return;
-      if (!user || p.userId === user.sub) return; // ignore self
+      if (p.userId === user.sub) return; // ignore self
 
       setTyping((prev) => {
         const next = { ...prev };
@@ -144,6 +162,40 @@ export default function ChatPage() {
     };
   }, [active, user]);
 
+  // Realtime: presence (snapshot + updates)
+  useEffect(() => {
+    // start when user/token is available
+    if (!user) return;
+    let s;
+    try {
+      s = getSocket();
+    } catch {
+      return;
+    }
+
+    const onSnapshot = (p: { online: OnlineUser[] }) => {
+      setOnline(p.online ?? []);
+    };
+
+    const onUpdate = (p: { user: OnlineUser; isOnline: boolean }) => {
+      setOnline((prev) => {
+        const exists = prev.some((u) => u.id === p.user.id);
+        if (p.isOnline && !exists) return [...prev, p.user];
+        if (!p.isOnline && exists)
+          return prev.filter((u) => u.id !== p.user.id);
+        return prev;
+      });
+    };
+
+    s.on("presence.snapshot", onSnapshot);
+    s.on("presence.update", onUpdate);
+
+    return () => {
+      s.off("presence.snapshot", onSnapshot);
+      s.off("presence.update", onUpdate);
+    };
+  }, [user]); // listen again once user is available
+
   // Auto-scroll
   useEffect(() => {
     if (listRef.current) {
@@ -159,7 +211,7 @@ export default function ChatPage() {
   async function handleSend() {
     if (!canSend) return;
     try {
-      await sendMessage(active!, text.trim()); // only content; backend derives author from JWT
+      await sendMessage(active!, text.trim()); // auteur via JWT
       setText("");
     } catch (e) {
       console.error("Failed to send message:", e);
@@ -169,37 +221,30 @@ export default function ChatPage() {
   // Emit typing with debounce
   function handleTypingInput(v: string) {
     setText(v);
-    const s = getSocket();
-    if (!active) return;
+    if (!active || !user) return;
+
+    let s;
+    try {
+      s = getSocket(); // try/catch, so there's no error if token missing
+    } catch {
+      return;
+    }
 
     s.emit("typing", { channelId: active, isTyping: true });
 
     if (stopTypingTimer.current) clearTimeout(stopTypingTimer.current);
     stopTypingTimer.current = setTimeout(() => {
-      s.emit("typing", { channelId: active, isTyping: false });
+      try {
+        s.emit("typing", { channelId: active, isTyping: false });
+      } catch {}
     }, 1500);
-  }
-
-  async function handleCreateChannel(e?: React.FormEvent) {
-    e?.preventDefault();
-    const name = newChannel.trim();
-    if (!name) return;
-    try {
-      setCreating(true);
-      const c = await createChannel(name);
-      setChannels((prev) => [...prev, c]);
-      setActive(c.id);
-      setNewChannel("");
-    } finally {
-      setCreating(false);
-    }
   }
 
   function handleLogout() {
     try {
       getSocket().disconnect();
     } catch {}
-    logout();
+    logout(); // makes sure that socket auth is also cleared
     setMsgs([]);
     setUser(null);
     setActive(null);
@@ -216,7 +261,7 @@ export default function ChatPage() {
     );
   }
 
-  // Build typing label with names
+  // Typing label
   const typingNames = Object.values(typing).map((t) => t.name);
   let typingLabel = "";
   if (typingNames.length === 1) typingLabel = `${typingNames[0]} is typing…`;
@@ -224,6 +269,8 @@ export default function ChatPage() {
     typingLabel = `${typingNames[0]} and ${typingNames[1]} are typing…`;
   else if (typingNames.length >= 3)
     typingLabel = `${typingNames[0]}, ${typingNames[1]} and others are typing…`;
+
+  const othersOnline = online.filter((u) => u.id !== user.sub);
 
   return (
     <div className="grid grid-rows-[48px_1fr] min-h-dvh">
@@ -237,37 +284,70 @@ export default function ChatPage() {
 
       <div className="grid grid-cols-[280px_1fr]">
         {/* Sidebar */}
-        <aside className="border-r p-3 space-y-3">
-          <h2 className="font-semibold">Channels</h2>
-
-          <form onSubmit={handleCreateChannel} className="flex gap-2">
-            <input
-              className="border rounded flex-1 p-2"
-              placeholder="New channel…"
-              value={newChannel}
-              onChange={(e) => setNewChannel(e.target.value)}
-              disabled={creating}
-            />
-            <button
-              className="border rounded px-3"
-              disabled={creating || !newChannel.trim()}
+        <aside className="border-r p-3 space-y-4">
+          <div>
+            <h2 className="font-semibold">Channels</h2>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!newChannel.trim()) return;
+                (async () => {
+                  try {
+                    setCreating(true);
+                    const c = await createChannel(newChannel.trim());
+                    setChannels((prev) => [...prev, c]);
+                    setActive(c.id);
+                    setNewChannel("");
+                  } finally {
+                    setCreating(false);
+                  }
+                })();
+              }}
+              className="mt-2 flex gap-2"
             >
-              Add
-            </button>
-          </form>
-
-          <div className="space-y-1">
-            {channels.map((c) => (
+              <input
+                className="border rounded flex-1 p-2"
+                placeholder="New channel…"
+                value={newChannel}
+                onChange={(e) => setNewChannel(e.target.value)}
+                disabled={creating}
+              />
               <button
-                key={c.id}
-                onClick={() => setActive(c.id)}
-                className={`block w-full text-left px-2 py-1 rounded ${
-                  active === c.id ? "bg-gray-200" : "hover:bg-gray-100"
-                }`}
+                className="border rounded px-3"
+                disabled={creating || !newChannel.trim()}
               >
-                #{c.name}
+                Add
               </button>
-            ))}
+            </form>
+
+            <div className="mt-2 space-y-1">
+              {channels.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => setActive(c.id)}
+                  className={`block w-full text-left px-2 py-1 rounded ${active === c.id ? "bg-gray-200" : "hover:bg-gray-100"}`}
+                >
+                  #{c.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Online users */}
+          <div>
+            <h3 className="font-semibold">Online ({othersOnline.length})</h3>
+            <div className="mt-1 space-y-1">
+              {othersOnline.length === 0 ? (
+                <div className="text-sm text-gray-500">No one else online</div>
+              ) : (
+                othersOnline.map((u) => (
+                  <div key={u.id} className="flex items-center gap-2 text-sm">
+                    <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
+                    <span>{u.displayName}</span>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </aside>
 
@@ -296,9 +376,7 @@ export default function ChatPage() {
               placeholder="Type a message…"
               value={text}
               onChange={(e) => handleTypingInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleSend();
-              }}
+              onKeyDown={(e) => e.key === "Enter" && handleSend()}
             />
             <button
               className="border rounded px-4"
