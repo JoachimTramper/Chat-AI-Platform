@@ -27,6 +27,13 @@ if (typeof window !== "undefined") {
   if (t) api.defaults.headers.common.Authorization = `Bearer ${t}`;
 }
 
+// --- Axios interceptor (always attach latest token) ---
+api.interceptors.request.use((config) => {
+  const token = getToken();
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
 // --- Axios interceptor (auto logout at 401) ---
 api.interceptors.response.use(
   (r) => r,
@@ -115,4 +122,21 @@ export async function getOrCreateDirectChannel(userId: string) {
     name: string;
     members: { id: string; displayName: string }[];
   };
+}
+
+// Mark a channel as read
+export async function markChannelRead(channelId: string) {
+  const { data } = await api.post(`/channels/${channelId}/read`);
+  return data;
+}
+
+// Get channels with unread counts
+export async function listChannelsWithUnread() {
+  const { data } = await api.get(`/channels/with-unread`);
+  return data as Array<{
+    id: string;
+    name: string;
+    isDirect: boolean;
+    unread: number;
+  }>;
 }

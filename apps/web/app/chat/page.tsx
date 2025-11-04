@@ -9,6 +9,8 @@ import {
   logout,
   createChannel,
   listDirectChannels,
+  markChannelRead,
+  listChannelsWithUnread,
 } from "@/lib/api";
 import { getSocket } from "@/lib/socket";
 import { getOrCreateDirectChannel } from "@/lib/api";
@@ -29,11 +31,12 @@ type Message = {
 };
 type Me = { sub: string; email: string; displayName: string };
 type OnlineUser = { id: string; displayName: string; lastSeen?: string | null };
+type ChannelWithUnread = Channel & { unread?: number };
 
 export default function ChatPage() {
   const router = useRouter();
   const [user, setUser] = useState<Me | null>(null);
-  const [channels, setChannels] = useState<Channel[]>([]);
+  const [channels, setChannels] = useState<ChannelWithUnread[]>([]);
   const [active, setActive] = useState<string | null>(null);
   const [msgs, setMsgs] = useState<Message[]>([]);
   const [text, setText] = useState("");
@@ -64,15 +67,39 @@ export default function ChatPage() {
   // Load channels (create "general" if none)
   useEffect(() => {
     (async () => {
-      const cs = await listChannels();
-      if (!cs || cs.length === 0) {
-        const c = await createChannel("general");
-        setChannels([c]);
-        setActive(c.id);
-        return;
+      try {
+        const items = await listChannelsWithUnread();
+
+        if (!items || items.length === 0) {
+          const c = await createChannel("general");
+          const next = await listChannelsWithUnread();
+
+          setChannels((prev) => {
+            const byId = new Map(prev.map((x) => [x.id, x]));
+            for (const it of next) {
+              const old = byId.get(it.id);
+              byId.set(it.id, old ? { ...old, ...it } : it);
+            }
+            return Array.from(byId.values());
+          });
+
+          setActive(next[0]?.id ?? c.id);
+          return;
+        }
+
+        setChannels((prev) => {
+          const byId = new Map(prev.map((x) => [x.id, x]));
+          for (const it of items) {
+            const old = byId.get(it.id);
+            byId.set(it.id, old ? { ...old, ...it } : it);
+          }
+          return Array.from(byId.values());
+        });
+
+        setActive(items[0]?.id ?? null);
+      } catch (e) {
+        console.error("Failed to load channels with unread:", e);
       }
-      setChannels(cs);
-      if (cs[0]) setActive(cs[0].id);
     })();
   }, []);
 
@@ -83,6 +110,11 @@ export default function ChatPage() {
       try {
         const ms = await listMessages(active);
         setMsgs(ms.reverse());
+        await markChannelRead(active);
+        // reset unread in UI
+        setChannels((prev) =>
+          prev.map((c) => (c.id === active ? { ...c, unread: 0 } : c))
+        );
       } catch (err) {
         console.error("Failed to load messages:", err);
       }
@@ -91,37 +123,77 @@ export default function ChatPage() {
 
   // Realtime: messages
   useEffect(() => {
-    // wait for user (token) and catch missing token
-    if (!active || !user) return;
+    if (!user) return;
     let s;
     try {
       s = getSocket();
     } catch {
-      return; // no token yet, try again later
+      return;
     }
 
     const onCreated = (payload: any) => {
-      if (payload?.channelId !== active) return;
+      const channelId =
+        payload?.channelId ?? payload?.channel?.id ?? payload?.channel_id;
 
-      const authorId = payload.author?.id ?? payload.authorId ?? "unknown";
-      const displayName =
-        payload.author?.displayName ?? payload.authorDisplayName ?? "Someone";
-      const createdAt =
-        typeof payload.createdAt === "string"
-          ? payload.createdAt
-          : new Date().toISOString();
+      const authorId =
+        payload?.author?.id ?? payload?.authorId ?? payload?.userId;
 
-      setMsgs((prev) => [
-        ...prev,
-        {
-          id: payload.id ?? Math.random().toString(36),
-          content: payload.content ?? "",
-          authorId,
-          createdAt,
-          author: { id: authorId, displayName },
-        },
-      ]);
+      if (!channelId) return;
+
+      // Active channel: show message and keep unread at 0
+      if (channelId === active) {
+        const displayName =
+          payload?.author?.displayName ??
+          payload?.authorDisplayName ??
+          "Someone";
+        const createdAt =
+          typeof payload?.createdAt === "string"
+            ? payload.createdAt
+            : (payload?.created_at ?? new Date().toISOString());
+
+        setMsgs((prev) => [
+          ...prev,
+          {
+            id: payload.id ?? Math.random().toString(36),
+            content: payload.content ?? "",
+            authorId: authorId ?? "unknown",
+            createdAt,
+            author: { id: authorId ?? "unknown", displayName },
+          },
+        ]);
+
+        setChannels((prev) =>
+          prev.map((c) => (c.id === channelId ? { ...c, unread: 0 } : c))
+        );
+        return;
+      }
+
+      // Other channel: unread++ (unless it's my own message)
+      if (authorId !== user.sub) {
+        setChannels((prev) => {
+          const exists = prev.some((c) => c.id === channelId);
+          if (!exists) {
+            // Directly visible with unread: 1 (placeholder)
+            return [
+              ...prev,
+              {
+                id: channelId,
+                name:
+                  payload?.channel?.name ??
+                  payload?.author?.displayName ??
+                  "Direct",
+                isDirect: !!(payload?.channel?.isDirect ?? payload?.isDirect),
+                unread: 1,
+              },
+            ];
+          }
+          return prev.map((c) =>
+            c.id === channelId ? { ...c, unread: (c.unread ?? 0) + 1 } : c
+          );
+        });
+      }
     };
+
     s.on("message.created", onCreated);
     return () => {
       s.off("message.created", onCreated);
@@ -197,7 +269,7 @@ export default function ChatPage() {
     };
 
     const onUpdate = (p: { user: OnlineUser; isOnline: boolean }) => {
-      // online lijst bijwerken
+      // online list update
       setOnline((prev) => {
         const exists = prev.some((u) => u.id === p.user.id);
         if (p.isOnline) {
@@ -207,13 +279,13 @@ export default function ChatPage() {
           return prev.filter((u) => u.id !== p.user.id);
         }
       });
-      // recently lijst bijwerken
+      // recently list update
       setRecently((prev) => {
         if (p.isOnline) {
-          // werd online -> uit recently
+          // became online -> remove from recently
           return prev.filter((u) => u.id !== p.user.id);
         } else {
-          // werd offline -> invoegen/sorteren op lastSeen desc
+          // became offline -> insert/sort by lastSeen desc
           const others = prev.filter((u) => u.id !== p.user.id);
           const next = [p.user, ...others];
           return next
@@ -387,8 +459,11 @@ export default function ChatPage() {
       : `#${activeChannel.name}`
     : "Chat";
 
-  const regularChannels = channels.filter((c) => !c.isDirect);
-  const dmChannels = channels.filter((c) => c.isDirect);
+  const regularChannels: ChannelWithUnread[] = channels.filter(
+    (c) => !c.isDirect
+  );
+
+  const dmChannels: ChannelWithUnread[] = channels.filter((c) => c.isDirect);
 
   return (
     <div className="grid grid-rows-[48px_1fr] min-h-dvh">
@@ -465,16 +540,26 @@ export default function ChatPage() {
                   <button
                     key={c.id}
                     onClick={() => setActive(c.id)}
-                    className={`block w-full text-left px-2 py-1 rounded text-sm border
-            ${
-              active === c.id
-                ? "bg-blue-50 text-blue-700 border-blue-200 font-medium"
-                : "hover:bg-gray-100 border-transparent"
-            }`}
+                    className={`flex items-center justify-between w-full text-left px-2 py-1 rounded text-sm border
+      ${
+        active === c.id
+          ? "bg-blue-50 text-blue-700 border-blue-200 font-medium"
+          : "hover:bg-gray-100 border-transparent"
+      }`}
                   >
-                    #{c.name}
+                    <span>#{c.name}</span>
+                    {(c.unread ?? 0) > 0 && (
+                      <span
+                        className="ml-auto inline-flex items-center justify-center rounded-full
+               bg-blue-500 text-white text-[10px] font-semibold
+               min-w-4 h-4 px-[5px] leading-none shadow-sm"
+                      >
+                        {c.unread}
+                      </span>
+                    )}
                   </button>
                 ))}
+
                 {regularChannels.length === 0 && (
                   <div className="text-sm text-gray-500 mt-1">
                     No channels yet
@@ -496,14 +581,23 @@ export default function ChatPage() {
                     <button
                       key={c.id}
                       onClick={() => setActive(c.id)}
-                      className={`block w-full text-left px-2 py-1 rounded text-sm border
-              ${
-                active === c.id
-                  ? "bg-blue-50 text-blue-700 border-blue-200 font-medium"
-                  : "hover:bg-gray-100 border-transparent"
-              }`}
+                      className={`flex items-center justify-between w-full text-left px-2 py-1 rounded text-sm border
+    ${
+      active === c.id
+        ? "bg-blue-50 text-blue-700 border-blue-200 font-medium"
+        : "hover:bg-gray-100 border-transparent"
+    }`}
                     >
-                      💬 {c.name}
+                      <span>💬 {c.name}</span>
+                      {(c.unread ?? 0) > 0 && (
+                        <span
+                          className="ml-auto inline-flex items-center justify-center rounded-full
+               bg-blue-500 text-white text-[10px] font-semibold
+               min-w-4 h-4 px-[5px] leading-none shadow-sm"
+                        >
+                          {c.unread}
+                        </span>
+                      )}
                     </button>
                   ))
                 )}

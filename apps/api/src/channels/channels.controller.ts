@@ -1,4 +1,3 @@
-// apps/api/src/channels/channels.controller.ts
 import {
   Body,
   Controller,
@@ -9,9 +8,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ChannelsService } from './channels.service';
-import { AuthGuard } from '@nestjs/passport';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
-@UseGuards(AuthGuard('jwt')) // <-- voeg deze toe (of je eigen JwtAuthGuard)
 @Controller('channels')
 export class ChannelsController {
   constructor(private svc: ChannelsService) {}
@@ -27,16 +25,33 @@ export class ChannelsController {
     return this.svc.create(name);
   }
 
+  // === Unread / Read ===
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/read')
+  async markRead(@Req() req: any, @Param('id') id: string) {
+    const meId = req.user.sub;
+    return this.svc.markRead(meId, id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('with-unread')
+  async listWithUnread(@Req() req: any) {
+    const meId = req.user.sub;
+    return this.svc.listWithUnread(meId);
+  }
+
   // === Direct messages ===
+  @UseGuards(JwtAuthGuard)
   @Get('direct')
   async listMyDirects(@Req() req: any) {
-    const meId = req.user.sub; // <-- nu gegarandeerd gevuld
+    const meId = req.user.sub;
     return this.svc.listMyDirectChannels(meId);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get('direct/:userId')
   async getOrCreateDirect(@Req() req: any, @Param('userId') userId: string) {
-    const meId = req.user.sub; // <-- nu gegarandeerd gevuld
+    const meId = req.user.sub;
     return this.svc.getOrCreateDirectChannel(meId, userId);
   }
 }

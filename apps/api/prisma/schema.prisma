@@ -16,6 +16,9 @@ model User {
   messages     Message[]
   lastSeen     DateTime?
   channels     Channel[] @relation("ChannelMembers")
+
+  // ← back-relation naar ChannelRead
+  reads ChannelRead[]
 }
 
 model Channel {
@@ -26,6 +29,9 @@ model Channel {
   messages  Message[]
   members   User[]    @relation("ChannelMembers")
   dmKey     String?   @unique
+
+  // ← back-relation naar ChannelRead
+  reads ChannelRead[]
 }
 
 model Message {
@@ -38,4 +44,16 @@ model Message {
   channel   Channel  @relation(fields: [channelId], references: [id])
 
   @@index([channelId, createdAt(sort: Desc)])
+}
+
+model ChannelRead {
+  userId    String
+  channelId String
+  lastRead  DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id])
+  channel Channel @relation(fields: [channelId], references: [id])
+
+  @@id([userId, channelId])
+  @@index([channelId, lastRead])
 }
