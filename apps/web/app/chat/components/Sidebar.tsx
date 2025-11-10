@@ -30,8 +30,9 @@ export function Sidebar({
   formatLastOnline: (d?: string | null) => string;
 }) {
   return (
-    <aside className="border-r p-3 space-y-4">
+    <aside className="border-r p-3 space-y-4 overflow-auto min-h-0">
       <div className="space-y-6">
+        {/* Channels */}
         <section>
           <h2 className="font-semibold text-xs uppercase tracking-wide text-gray-500">
             Channels
@@ -64,7 +65,11 @@ export function Sidebar({
                 key={c.id}
                 onClick={() => setActive(c.id)}
                 className={`flex items-center justify-between w-full text-left px-2 py-1 rounded text-sm border
-                ${active === c.id ? "bg-blue-50 text-blue-700 border-blue-200 font-medium" : "hover:bg-gray-100 border-transparent"}`}
+                  ${
+                    active === c.id
+                      ? "bg-blue-50 text-blue-700 border-blue-200 font-medium"
+                      : "hover:bg-gray-100 border-transparent"
+                  }`}
               >
                 <span>#{c.name}</span>
                 {(c.unread ?? 0) > 0 && (
@@ -80,6 +85,7 @@ export function Sidebar({
           </div>
         </section>
 
+        {/* DMs */}
         <section>
           <h3 className="font-semibold text-xs uppercase tracking-wide text-gray-500">
             Direct Messages
@@ -93,7 +99,11 @@ export function Sidebar({
                   key={c.id}
                   onClick={() => setActive(c.id)}
                   className={`flex items-center justify-between w-full text-left px-2 py-1 rounded text-sm border
-                  ${active === c.id ? "bg-blue-50 text-blue-700 border-blue-200 font-medium" : "hover:bg-gray-100 border-transparent"}`}
+                    ${
+                      active === c.id
+                        ? "bg-blue-50 text-blue-700 border-blue-200 font-medium"
+                        : "hover:bg-gray-100 border-transparent"
+                    }`}
                 >
                   <span>💬 {c.name}</span>
                   {(c.unread ?? 0) > 0 && (
@@ -108,6 +118,7 @@ export function Sidebar({
         </section>
       </div>
 
+      {/* Online */}
       <div>
         <h3 className="font-semibold">Online ({othersOnline.length})</h3>
         <div className="mt-1 space-y-1">
@@ -134,6 +145,7 @@ export function Sidebar({
         </div>
       </div>
 
+      {/* Offline */}
       <div className="mt-6">
         <h3 className="font-semibold">Offline ({recently.length})</h3>
         <div className="mt-1 space-y-2">

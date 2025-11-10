@@ -1,18 +1,17 @@
 "use client";
+import React from "react";
 
-export function Composer({
-  value,
-  onChange,
-  onSend,
-}: {
+type ComposerProps = {
   value: string;
   onChange: (v: string) => void;
   onSend: () => void;
-}) {
+};
+
+export function Composer({ value, onChange, onSend }: ComposerProps) {
   const canSend = !!value.trim();
 
   return (
-    <div className="border-t p-3 flex gap-2">
+    <div className="border-t p-3 flex gap-2 shrink-0 bg-white">
       <input
         className="border rounded flex-1 p-2"
         placeholder="Type a message…"

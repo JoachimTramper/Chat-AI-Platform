@@ -277,8 +277,8 @@ export default function ChatPage() {
   const dmChannels = channels.filter((c) => c.isDirect);
 
   return (
-    <div className="grid grid-rows-[48px_1fr] min-h-dvh">
-      <header className="border-b bg-gray-50 px-4 py-2 flex items-center justify-between">
+    <div className="h-dvh overflow-hidden grid grid-rows-[48px_1fr]">
+      <header className="sticky top-0 z-10 border-b bg-gray-50 px-4 py-2 flex items-center justify-between">
         <div className="flex items-center gap-2 text-base font-semibold">
           {activeChannel?.isDirect ? (
             <>
@@ -302,7 +302,7 @@ export default function ChatPage() {
         </button>
       </header>
 
-      <div className="grid grid-cols-[280px_1fr]">
+      <div className="grid grid-cols-[280px_1fr] min-h-0">
         <Sidebar
           regularChannels={regularChannels}
           dmChannels={dmChannels}
@@ -318,7 +318,7 @@ export default function ChatPage() {
           formatLastOnline={formatLastOnline}
         />
 
-        <main className="flex flex-col">
+        <main className="grid grid-rows-[1fr_auto] min-h-0">
           <MessageList
             msgs={msgs}
             meId={user.sub}
@@ -346,7 +346,9 @@ export default function ChatPage() {
           />
 
           {typingLabel && (
-            <div className="px-4 py-1 text-sm text-gray-600">{typingLabel}</div>
+            <div className="px-4 py-1 text-sm text-gray-600 shrink-0 bg-white border-t">
+              {typingLabel}
+            </div>
           )}
 
           <Composer

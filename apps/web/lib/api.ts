@@ -1,6 +1,7 @@
 // lib/api.ts
 import axios from "axios";
 import { refreshSocketAuth } from "@/lib/socket";
+import type { Message } from "@/app/chat/types";
 
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_BASE || "http://localhost:3000",
@@ -94,18 +95,19 @@ export async function createChannel(name: string) {
   return data as { id: string; name: string };
 }
 
-export async function listMessages(channelId: string) {
-  const { data } = await api.get(`/channels/${channelId}/messages`);
-  return data as Array<{
-    id: string;
-    content: string | null;
-    authorId: string;
-    createdAt: string;
-    updatedAt?: string;
-    deletedAt?: string | null;
-    deletedBy?: { id: string; displayName: string } | null;
-    author: { id: string; displayName: string };
-  }>;
+export async function listMessages(
+  channelId: string,
+  opts?: { take?: number; cursor?: string }
+): Promise<Message[]> {
+  const params = new URLSearchParams();
+  if (opts?.take) params.set("take", String(opts.take));
+  if (opts?.cursor) params.set("cursor", opts.cursor);
+
+  const qs = params.toString();
+  const { data } = await api.get(
+    `/channels/${channelId}/messages${qs ? `?${qs}` : ""}`
+  );
+  return data as Message[];
 }
 
 export async function sendMessage(channelId: string, content?: string) {

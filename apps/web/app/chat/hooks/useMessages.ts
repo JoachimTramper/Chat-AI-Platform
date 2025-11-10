@@ -20,6 +20,8 @@ export function useMessages(
   const [msgs, setMsgs] = useState<Message[]>([]);
   const listRef = useRef<HTMLDivElement | null>(null);
   const ready = !!(active && userId);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
 
   // keep latest resolver & userId in refs (avoid changing effect deps length)
   const resolveNameRef = useRef<ResolveDisplayName | undefined>(undefined);
@@ -41,6 +43,29 @@ export function useMessages(
       await markChannelRead(active!);
     })();
   }, [ready, active]);
+
+  const loadOlder = async () => {
+    if (!active || loadingOlder || !hasMore || msgs.length === 0) return;
+    setLoadingOlder(true);
+    try {
+      const firstId = msgs[0]?.id;
+      if (!firstId) return;
+
+      const older = await listMessages(active, { cursor: firstId, take: 50 });
+      const batch = older.reverse();
+      if (batch.length === 0) setHasMore(false);
+
+      setMsgs((prev) => {
+        const byId = new Map(prev.map((m) => [m.id, m]));
+        for (const m of batch) byId.set(m.id, byId.get(m.id) ?? m);
+        return Array.from(byId.values()).sort(
+          (a, b) => +new Date(a.createdAt) - +new Date(b.createdAt)
+        );
+      });
+    } finally {
+      setLoadingOlder(false);
+    }
+  };
 
   // Realtime message events (deps length stays constant)
   useEffect(() => {
@@ -175,5 +200,16 @@ export function useMessages(
     }
   };
 
-  return { msgs, setMsgs, listRef, send, edit, remove, ready };
+  return {
+    msgs,
+    setMsgs,
+    listRef,
+    send,
+    edit,
+    remove,
+    loadOlder,
+    loadingOlder,
+    hasMore,
+    ready,
+  };
 }
