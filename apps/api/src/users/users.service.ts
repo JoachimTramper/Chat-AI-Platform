@@ -22,4 +22,17 @@ export class UsersService {
   create(data: { email: string; passwordHash: string; displayName: string }) {
     return this.db.user.create({ data });
   }
+
+  async updateAvatar(userId: string, avatarUrl: string | null) {
+    return this.db.user.update({
+      where: { id: userId },
+      data: { avatarUrl },
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        avatarUrl: true,
+      },
+    });
+  }
 }

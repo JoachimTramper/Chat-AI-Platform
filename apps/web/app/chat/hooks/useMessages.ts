@@ -34,13 +34,23 @@ export function useMessages(
     userIdRef.current = userId;
   }, [userId]);
 
-  // Load initial messages + mark read
+  // Load initial messages + mark read, and scroll to bottom after load
   useEffect(() => {
     if (!ready) return;
+
     (async () => {
       const ms = await listMessages(active!);
       setMsgs(ms.reverse());
       await markChannelRead(active!);
+
+      // Scroll naar onderen zodra de nieuwe berichten staan
+      // één frame wachten zodat de DOM geüpdatet is
+      requestAnimationFrame(() => {
+        const el = listRef.current;
+        if (el) {
+          el.scrollTop = el.scrollHeight;
+        }
+      });
     })();
   }, [ready, active]);
 
@@ -88,10 +98,17 @@ export function useMessages(
           updatedAt: p.updatedAt,
           deletedAt: p.deletedAt ?? null,
           deletedBy: p.deletedBy ?? null,
-          author: p.author ?? {
-            id: p.authorId ?? "unknown",
-            displayName: p?.author?.displayName ?? "Someone",
-          },
+          author: p.author
+            ? {
+                id: p.author.id,
+                displayName: p.author.displayName,
+                avatarUrl: p.author.avatarUrl ?? null,
+              }
+            : {
+                id: p.authorId ?? "unknown",
+                displayName: p?.author?.displayName ?? "Someone",
+                avatarUrl: null,
+              },
         },
       ]);
     };
@@ -127,9 +144,17 @@ export function useMessages(
                 ...m,
                 deletedAt: p.deletedAt,
                 deletedBy: p.deletedBy
-                  ? p.deletedBy
+                  ? {
+                      id: p.deletedBy.id,
+                      displayName: p.deletedBy.displayName,
+                      avatarUrl: p.deletedBy.avatarUrl ?? null,
+                    }
                   : p.deletedById
-                    ? { id: p.deletedById, displayName }
+                    ? {
+                        id: p.deletedById,
+                        displayName,
+                        avatarUrl: null,
+                      }
                     : null,
                 content: null,
               }
@@ -148,12 +173,15 @@ export function useMessages(
     };
   }, [ready, active]); // ← constant deps
 
-  // Auto-scroll to bottom when near bottom
+  // Auto-scroll at bottom on new messages
   useEffect(() => {
     const el = listRef.current;
     if (!el) return;
+
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 64;
-    if (nearBottom) el.scrollTop = el.scrollHeight;
+    if (nearBottom) {
+      el.scrollTop = el.scrollHeight;
+    }
   }, [msgs]);
 
   // Actions with optimistic UI
@@ -188,9 +216,14 @@ export function useMessages(
     const optimistic = {
       ...prev,
       deletedAt: new Date().toISOString(),
-      deletedBy: actor,
+      deletedBy: {
+        id: actor.id,
+        displayName: actor.displayName,
+        avatarUrl: prev.deletedBy?.avatarUrl ?? prev.author.avatarUrl ?? null,
+      },
       content: null,
     };
+
     setMsgs((curr) => curr.map((m) => (m.id === messageId ? optimistic : m)));
     try {
       await deleteMessage(active, messageId);

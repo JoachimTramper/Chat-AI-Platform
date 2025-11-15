@@ -1,5 +1,13 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type UIEvent,
+  type ChangeEvent,
+} from "react";
 import { useRouter } from "next/navigation";
 import {
   me,
@@ -8,6 +16,8 @@ import {
   listDirectChannels,
   listChannelsWithUnread,
   getOrCreateDirectChannel,
+  updateAvatar,
+  uploadAvatarFile,
 } from "@/lib/api";
 
 import type { ChannelWithUnread, Message, Me } from "./types";
@@ -18,6 +28,7 @@ import { useMessages } from "./hooks/useMessages";
 import { useTyping } from "./hooks/useTyping";
 import { usePresence } from "./hooks/usePresence";
 import { useUnread } from "./hooks/useUnread";
+import { Avatar } from "./components/Avatar";
 
 export default function ChatPage() {
   const router = useRouter();
@@ -29,6 +40,8 @@ export default function ChatPage() {
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState<string>("");
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
 
   // auth guard
   useEffect(() => {
@@ -61,14 +74,20 @@ export default function ChatPage() {
   }, []);
 
   // hooks
-  const { msgs, listRef, send, edit, remove } = useMessages(active, user?.sub, {
+  const {
+    msgs,
+    listRef,
+    send,
+    edit,
+    remove,
+    loadOlder,
+    loadingOlder,
+    hasMore,
+  } = useMessages(active, user?.sub, {
     resolveDisplayName,
   });
-  const {
-    typing,
-    label: typingLabel,
-    emitTyping,
-  } = useTyping(active, user?.sub);
+
+  const { label: typingLabel, emitTyping } = useTyping(active, user?.sub);
   const { othersOnline, recently } = usePresence(user?.sub);
   useUnread({ active, myId: user?.sub, setChannels });
 
@@ -114,7 +133,7 @@ export default function ChatPage() {
             id: dm.id,
             name: other?.displayName || dm.name || "Direct",
             isDirect: true,
-            members: dm.members ?? [], // keep members to resolve display names
+            members: dm.members ?? [],
           };
         });
         setChannels((prev) => {
@@ -238,6 +257,13 @@ export default function ChatPage() {
     router.push("/login");
   }
 
+  function handleScroll(e: UIEvent<HTMLDivElement>) {
+    const el = e.currentTarget;
+    if (el.scrollTop <= 32 && !loadingOlder && hasMore) {
+      loadOlder();
+    }
+  }
+
   async function openDM(otherUserId: string) {
     try {
       const dm = await getOrCreateDirectChannel(otherUserId);
@@ -252,13 +278,37 @@ export default function ChatPage() {
                 id: dm.id,
                 name: label,
                 isDirect: true,
-                members: dm.members ?? [], // keep members here too
+                members: dm.members ?? [],
               },
             ]
       );
       setActive(dm.id);
     } catch (e) {
       console.error("Failed to open DM:", e);
+    }
+  }
+
+  async function handleAvatarFileChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setAvatarUploading(true);
+      const updated = await uploadAvatarFile(file);
+      setUser(updated as Me);
+    } catch (err) {
+      console.error("Failed to upload avatar:", err);
+    } finally {
+      setAvatarUploading(false);
+      e.target.value = "";
+    }
+  }
+
+  async function handleRemoveAvatar() {
+    try {
+      const updated = await updateAvatar();
+      setUser(updated as Me);
+    } catch (err) {
+      console.error("Failed to remove avatar:", err);
     }
   }
 
@@ -277,8 +327,9 @@ export default function ChatPage() {
   const dmChannels = channels.filter((c) => c.isDirect);
 
   return (
-    <div className="h-dvh overflow-hidden grid grid-rows-[48px_1fr]">
-      <header className="sticky top-0 z-10 border-b bg-gray-50 px-4 py-2 flex items-center justify-between">
+    <div className="h-dvh overflow-hidden flex flex-col">
+      {/* header + avatar button */}
+      <header className="border-b bg-gray-50 px-4 py-2 flex items-center justify-between">
         <div className="flex items-center gap-2 text-base font-semibold">
           {activeChannel?.isDirect ? (
             <>
@@ -294,15 +345,51 @@ export default function ChatPage() {
             </>
           )}
         </div>
-        <button
-          className="text-sm text-gray-600 hover:text-red-600 underline-offset-2 hover:underline"
-          onClick={handleLogout}
-        >
-          Logout
-        </button>
+
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            className="flex items-center gap-2 rounded-full px-2 py-1 hover:bg-gray-100"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={avatarUploading}
+          >
+            <Avatar
+              name={user.displayName}
+              avatarUrl={user.avatarUrl}
+              size={28}
+            />
+            <span className="hidden sm:inline text-sm text-gray-700">
+              {avatarUploading ? "Uploading..." : user.displayName}
+            </span>
+          </button>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleAvatarFileChange}
+          />
+
+          <button
+            type="button"
+            className="text-xs text-gray-500 hover:underline"
+            onClick={handleRemoveAvatar}
+          >
+            Remove avatar
+          </button>
+
+          <button
+            className="text-sm text-gray-600 hover:text-red-600 underline-offset-2 hover:underline"
+            onClick={handleLogout}
+          >
+            Logout
+          </button>
+        </div>
       </header>
 
-      <div className="grid grid-cols-[280px_1fr] min-h-0">
+      {/* main layout */}
+      <div className="grid grid-cols-[280px_1fr] flex-1 min-h-0">
         <Sidebar
           regularChannels={regularChannels}
           dmChannels={dmChannels}
@@ -330,19 +417,8 @@ export default function ChatPage() {
             onSaveEdit={(m) => active && saveEdit(active, m.id)}
             onCancelEdit={cancelEdit}
             onDelete={(m) => active && removeMessage(active, m.id)}
-            formatDateTime={(iso) => {
-              const d = new Date(iso);
-              const date = d.toLocaleDateString(undefined, {
-                year: "numeric",
-                month: "short",
-                day: "2-digit",
-              });
-              const time = d.toLocaleTimeString(undefined, {
-                hour: "2-digit",
-                minute: "2-digit",
-              });
-              return `${date} ${time}`;
-            }}
+            formatDateTime={formatDateTime}
+            onScroll={handleScroll}
           />
 
           {typingLabel && (

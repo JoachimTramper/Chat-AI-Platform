@@ -1,6 +1,8 @@
 "use client";
+
 import type { ChannelWithUnread, OnlineUser } from "../types";
 import { MessageCircle } from "lucide-react";
+import { Avatar } from "./Avatar";
 
 export function Sidebar({
   regularChannels,
@@ -127,7 +129,11 @@ export function Sidebar({
           ) : (
             othersOnline.map((u) => (
               <div key={u.id} className="flex items-center gap-2 text-sm">
-                <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
+                <Avatar
+                  name={u.displayName}
+                  avatarUrl={u.avatarUrl ?? null}
+                  size={20}
+                />
                 <span className="flex items-center gap-2">
                   {u.displayName}
                   <button
@@ -159,7 +165,11 @@ export function Sidebar({
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <span className="inline-block w-2 h-2 rounded-full bg-gray-400" />
+                    <Avatar
+                      name={u.displayName}
+                      avatarUrl={u.avatarUrl ?? null}
+                      size={20}
+                    />
                     <span className="font-medium">{u.displayName}</span>
                   </div>
                   <button
@@ -170,7 +180,7 @@ export function Sidebar({
                     <MessageCircle size={16} />
                   </button>
                 </div>
-                <div className="ml-4 text-xs text-gray-500">
+                <div className="ml-8 text-xs text-gray-500">
                   {formatLastOnline(u.lastSeen)}
                 </div>
               </div>

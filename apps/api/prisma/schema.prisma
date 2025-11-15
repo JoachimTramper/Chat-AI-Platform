@@ -23,8 +23,11 @@ model User {
   lastSeen     DateTime?
   channels     Channel[]     @relation("ChannelMembers")
   reads        ChannelRead[]
+  avatarUrl    String?
 
   deletedMessages Message[] @relation("MessageDeletedBy")
+
+  reactions       MessageReaction[]
 }
 
 model Channel {
@@ -53,6 +56,8 @@ model Message {
   channel   Channel @relation(fields: [channelId], references: [id])
   deletedBy User?   @relation("MessageDeletedBy", fields: [deletedById], references: [id])
 
+  reactions MessageReaction[]
+
   @@index([channelId, createdAt(sort: Desc)])
   @@index([channelId, deletedAt])
 }
@@ -67,4 +72,16 @@ model ChannelRead {
 
   @@id([userId, channelId])
   @@index([channelId, lastRead])
+}
+
+model MessageReaction {
+  id        String   @id @default(cuid())
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  messageId String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
+
+  @@unique([messageId, userId, emoji])
 }

@@ -21,7 +21,22 @@ export class MessagesService {
       orderBy: { createdAt: 'desc' },
       take: safeTake,
       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
-      include: { author: { select: { id: true, displayName: true } } },
+      include: {
+        author: {
+          select: {
+            id: true,
+            displayName: true,
+            avatarUrl: true,
+          },
+        },
+        deletedBy: {
+          select: {
+            id: true,
+            displayName: true,
+            avatarUrl: true,
+          },
+        },
+      },
     });
   }
 
@@ -35,7 +50,15 @@ export class MessagesService {
     // 2) create
     const msg = await this.prisma.message.create({
       data: { channelId, authorId, content: content ?? '' },
-      include: { author: { select: { id: true, displayName: true } } },
+      include: {
+        author: {
+          select: {
+            id: true,
+            displayName: true,
+            avatarUrl: true,
+          },
+        },
+      },
     });
 
     // 3) realtime push (full payload)
@@ -45,7 +68,11 @@ export class MessagesService {
       authorId: msg.authorId,
       content: msg.content ?? null,
       createdAt: msg.createdAt.toISOString(),
-      author: msg.author,
+      author: {
+        id: msg.author.id,
+        displayName: msg.author.displayName,
+        avatarUrl: msg.author.avatarUrl ?? null,
+      },
     });
 
     return msg;

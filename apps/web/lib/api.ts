@@ -75,9 +75,41 @@ export async function login(email: string, password: string) {
   return data;
 }
 
+export type MeResponse = {
+  sub: string;
+  email: string;
+  displayName: string;
+  avatarUrl: string | null;
+};
+
 export async function me() {
   const { data } = await api.get("/auth/me");
-  return data as { sub: string; email: string; displayName: string };
+  return data as MeResponse;
+}
+
+export async function updateAvatar() {
+  const token = getToken();
+
+  const { data } = await api.patch(
+    "/auth/me/avatar",
+    undefined,
+    token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+  );
+
+  return data as MeResponse;
+}
+
+export async function uploadAvatarFile(file: File) {
+  const form = new FormData();
+  form.append("file", file);
+
+  const { data } = await api.post("/auth/me/avatar/upload", form, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+
+  return data as MeResponse;
 }
 
 export function logout() {
@@ -154,7 +186,7 @@ export async function listDirectChannels() {
     id: string;
     name: string;
     isDirect: boolean;
-    members: { id: string; displayName: string }[];
+    members: { id: string; displayName: string; avatarUrl: string | null }[];
   }>;
 }
 
@@ -163,7 +195,7 @@ export async function getOrCreateDirectChannel(userId: string) {
   return data as {
     id: string;
     name: string;
-    members: { id: string; displayName: string }[];
+    members: { id: string; displayName: string; avatarUrl: string | null }[];
   };
 }
 

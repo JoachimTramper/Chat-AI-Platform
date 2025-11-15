@@ -1,8 +1,13 @@
+// app/chat/types.ts
 export type Channel = {
   id: string;
   name: string;
   isDirect?: boolean;
-  members?: Array<{ id: string; displayName: string }>;
+  members?: Array<{
+    id: string;
+    displayName: string;
+    avatarUrl: string | null;
+  }>;
 };
 
 export type Message = {
@@ -12,16 +17,26 @@ export type Message = {
   createdAt: string;
   updatedAt?: string;
   deletedAt?: string | null;
-  deletedBy?: { id: string; displayName: string } | null;
-  author: { id: string; displayName: string };
+  deletedBy?: {
+    id: string;
+    displayName: string;
+    avatarUrl: string | null;
+  } | null;
+  author: {
+    id: string;
+    displayName: string;
+    avatarUrl: string | null;
+  };
 };
 
-export type Me = { sub: string; email: string; displayName: string };
+import type { MeResponse } from "@/lib/api";
+export type Me = MeResponse;
 
 export type OnlineUser = {
   id: string;
   displayName: string;
   lastSeen?: string | null;
+  avatarUrl: string | null;
 };
 
 export type ChannelWithUnread = Channel & { unread?: number };
