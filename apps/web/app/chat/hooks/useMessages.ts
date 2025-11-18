@@ -22,6 +22,9 @@ export function useMessages(
   const ready = !!(active && userId);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  const [lastReadMessageIdByOthers, setLastReadMessageIdByOthers] = useState<
+    string | null
+  >(null);
 
   // keep latest resolver & userId in refs (avoid changing effect deps length)
   const resolveNameRef = useRef<ResolveDisplayName | undefined>(undefined);
@@ -34,22 +37,29 @@ export function useMessages(
     userIdRef.current = userId;
   }, [userId]);
 
-  // Load initial messages + mark read, and scroll to bottom after load
   useEffect(() => {
     if (!ready) return;
 
     (async () => {
-      const ms = await listMessages(active!);
-      setMsgs(ms.reverse());
+      const raw = await listMessages(active!);
+
+      const normalized = raw.reverse().map((m) => ({
+        ...m,
+        // Prisma sends reactions + userId mee; reduce it to what we need
+        reactions: (m as any).reactions
+          ? (m as any).reactions.map((r: any) => ({
+              emoji: r.emoji,
+              userId: r.userId,
+            }))
+          : [],
+      }));
+
+      setMsgs(normalized);
       await markChannelRead(active!);
 
-      // Scroll naar onderen zodra de nieuwe berichten staan
-      // één frame wachten zodat de DOM geüpdatet is
       requestAnimationFrame(() => {
         const el = listRef.current;
-        if (el) {
-          el.scrollTop = el.scrollHeight;
-        }
+        if (el) el.scrollTop = el.scrollHeight;
       });
     })();
   }, [ready, active]);
@@ -109,6 +119,7 @@ export function useMessages(
                 displayName: p?.author?.displayName ?? "Someone",
                 avatarUrl: null,
               },
+          reactions: [], // nieuwe messages starten zonder reactions
         },
       ]);
     };
@@ -163,26 +174,89 @@ export function useMessages(
       );
     };
 
+    const onReactionAdded = (p: any) => {
+      // payload: { messageId, channelId, emoji, userId }
+      if (p.channelId !== active) return;
+
+      setMsgs((prev) =>
+        prev.map((m) => {
+          if (m.id !== p.messageId) return m;
+
+          const reactions = m.reactions ?? [];
+          const already = reactions.some(
+            (r) => r.emoji === p.emoji && r.userId === p.userId
+          );
+          if (already) return m;
+
+          return {
+            ...m,
+            reactions: [...reactions, { emoji: p.emoji, userId: p.userId }],
+          };
+        })
+      );
+    };
+
+    const onReactionRemoved = (p: any) => {
+      if (p.channelId !== active) return;
+
+      setMsgs((prev) =>
+        prev.map((m) => {
+          if (m.id !== p.messageId) return m;
+
+          const reactions = m.reactions ?? [];
+          const next = reactions.filter(
+            (r) => !(r.emoji === p.emoji && r.userId === p.userId)
+          );
+
+          return { ...m, reactions: next };
+        })
+      );
+    };
+
+    const onRead = (p: any) => {
+      if (p.channelId !== active) return;
+
+      if (p.userId === userIdRef.current) return;
+
+      if (p.messageId) {
+        setLastReadMessageIdByOthers(p.messageId);
+      }
+    };
+
+    s.on("message.read", onRead);
     s.on("message.created", onCreated);
     s.on("message.updated", onUpdated);
     s.on("message.deleted", onDeleted);
+    s.on("message.added", onReactionAdded);
+    s.on("message.removed", onReactionRemoved);
+
     return () => {
+      s.off("message.read", onRead);
       s.off("message.created", onCreated);
       s.off("message.updated", onUpdated);
       s.off("message.deleted", onDeleted);
+      s.off("message.added", onReactionAdded);
+      s.off("message.removed", onReactionRemoved);
     };
-  }, [ready, active]); // ← constant deps
+  }, [ready, active]);
 
   // Auto-scroll at bottom on new messages
   useEffect(() => {
     const el = listRef.current;
-    if (!el) return;
+    if (!el || !ready || !active) return;
 
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 64;
+
     if (nearBottom) {
+      // scroll till bottom
       el.scrollTop = el.scrollHeight;
+
+      // and immediately notify the server that we've seen everything
+      markChannelRead(active).catch((err) => {
+        console.error("Failed to mark channel read:", err);
+      });
     }
-  }, [msgs]);
+  }, [msgs, ready, active]);
 
   // Actions with optimistic UI
   const send = async (text: string) => {
@@ -244,5 +318,6 @@ export function useMessages(
     loadingOlder,
     hasMore,
     ready,
+    lastReadMessageIdByOthers,
   };
 }

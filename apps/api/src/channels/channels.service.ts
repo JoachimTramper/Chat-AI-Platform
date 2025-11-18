@@ -6,10 +6,14 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { WsGateway } from '../ws/ws.gateway';
 
 @Injectable()
 export class ChannelsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private ws: WsGateway,
+  ) {}
 
   list() {
     return this.prisma.channel.findMany({
@@ -30,21 +34,44 @@ export class ChannelsService {
     if (!meId) throw new UnauthorizedException('Missing auth user');
     if (!channelId) throw new NotFoundException('Missing channel id');
 
-    // Optionally: validate channel exists
+    // Check that channel exists
     const ch = await this.prisma.channel.findUnique({
       where: { id: channelId },
+      select: { id: true, isDirect: true },
     });
     if (!ch) throw new NotFoundException('Channel not found');
 
     const now = new Date();
+
+    // Update ChannelRead
     await this.prisma.channelRead.upsert({
       where: { userId_channelId: { userId: meId, channelId } },
       update: { lastRead: now },
       create: { userId: meId, channelId, lastRead: now },
     });
 
+    // Only for DM channels, emit a "message.read" event
+    if (ch.isDirect) {
+      const lastMsg = await this.prisma.message.findFirst({
+        where: {
+          channelId,
+          NOT: { authorId: meId },
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true },
+      });
+
+      if (lastMsg) {
+        this.ws.server.emit('message.read', {
+          channelId,
+          userId: meId,
+          messageId: lastMsg.id,
+          at: now.toISOString(),
+        });
+      }
+    }
+
     return { ok: true, channelId, lastRead: now.toISOString() };
-    // (Possibly to emit a socket-event, e.g. 'channel.read')
   }
 
   /**

@@ -42,6 +42,7 @@ export default function ChatPage() {
   const [editText, setEditText] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // auth guard
   useEffect(() => {
@@ -83,6 +84,7 @@ export default function ChatPage() {
     loadOlder,
     loadingOlder,
     hasMore,
+    lastReadMessageIdByOthers,
   } = useMessages(active, user?.sub, {
     resolveDisplayName,
   });
@@ -329,19 +331,35 @@ export default function ChatPage() {
   return (
     <div className="h-dvh overflow-hidden flex flex-col">
       {/* header + avatar button */}
-      <header className="border-b bg-gray-50 px-4 py-2 flex items-center justify-between">
-        <div className="flex items-center gap-2 text-base font-semibold">
+      <header className="border-b bg-gray-50 px-3 md:px-4 py-2 flex items-center justify-between">
+        <div className="flex items-center gap-2 text-base font-semibold min-w-0">
+          {/* mobile menu-button */}
+          <button
+            type="button"
+            className="md:hidden mr-1 text-xl"
+            onClick={() => setSidebarOpen((v) => !v)}
+            aria-label="Toggle sidebar"
+          >
+            ☰
+          </button>
+
           {activeChannel?.isDirect ? (
             <>
-              <span aria-hidden>💬</span>
-              <span>
+              <span aria-hidden className="hidden sm:inline">
+                💬
+              </span>
+              <span className="truncate max-w-[60vw] md:max-w-none">
                 Direct message with {activeChannel?.name ?? "Unknown"}
               </span>
             </>
           ) : (
             <>
-              <span aria-hidden>#</span>
-              <span>{activeChannel?.name ?? "Chat"}</span>
+              <span aria-hidden className="hidden sm:inline">
+                #
+              </span>
+              <span className="truncate max-w-[60vw] md:max-w-none">
+                {activeChannel?.name ?? "Chat"}
+              </span>
             </>
           )}
         </div>
@@ -389,26 +407,47 @@ export default function ChatPage() {
       </header>
 
       {/* main layout */}
-      <div className="grid grid-cols-[280px_1fr] flex-1 min-h-0">
-        <Sidebar
-          regularChannels={regularChannels}
-          dmChannels={dmChannels}
-          active={active}
-          setActive={(id) => setActive(id)}
-          newChannel={newChannel}
-          setNewChannel={setNewChannel}
-          creating={creating}
-          onCreateChannel={onCreateChannel}
-          othersOnline={othersOnline}
-          recently={recently}
-          openDM={openDM}
-          formatLastOnline={formatLastOnline}
-        />
+      <div className="flex-1 min-h-0 flex">
+        {/* Mobile backdrop */}
+        {sidebarOpen && (
+          <div
+            onClick={() => setSidebarOpen(false)}
+            className="fixed inset-0 bg-black/30 z-10 md:hidden"
+          />
+        )}
 
-        <main className="grid grid-rows-[1fr_auto] min-h-0">
+        {/* Sidebar */}
+        <div
+          className={`
+    ${sidebarOpen ? "fixed inset-y-0 left-0 z-20 w-64 bg-white block" : "hidden"}
+    md:static md:block md:w-72 md:border-r
+  `}
+        >
+          <Sidebar
+            regularChannels={regularChannels}
+            dmChannels={dmChannels}
+            active={active}
+            setActive={(id) => {
+              setActive(id);
+              setSidebarOpen(false); // close when selecting channel on mobile
+            }}
+            newChannel={newChannel}
+            setNewChannel={setNewChannel}
+            creating={creating}
+            onCreateChannel={onCreateChannel}
+            othersOnline={othersOnline}
+            recently={recently}
+            openDM={openDM}
+            formatLastOnline={formatLastOnline}
+          />
+        </div>
+
+        {/* Main */}
+        <main className="flex-1 grid grid-rows-[1fr_auto] min-h-0">
           <MessageList
             msgs={msgs}
             meId={user.sub}
+            channelId={active!}
             listRef={listRef}
             editingId={editingId}
             editText={editText}
@@ -419,10 +458,12 @@ export default function ChatPage() {
             onDelete={(m) => active && removeMessage(active, m.id)}
             formatDateTime={formatDateTime}
             onScroll={handleScroll}
+            isDirect={activeChannel?.isDirect ?? false}
+            lastReadMessageIdByOthers={lastReadMessageIdByOthers}
           />
 
           {typingLabel && (
-            <div className="px-4 py-1 text-sm text-gray-600 shrink-0 bg-white border-t">
+            <div className="px-3 md:px-4 py-1 text-sm text-gray-600 shrink-0 bg-white border-t">
               {typingLabel}
             </div>
           )}

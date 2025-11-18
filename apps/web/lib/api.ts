@@ -179,6 +179,32 @@ export async function deleteMessage(channelId: string, messageId: string) {
   );
 }
 
+// reactions
+export async function reactToMessage(
+  channelId: string,
+  messageId: string,
+  emoji: string
+) {
+  const { data } = await api.post(
+    `/channels/${channelId}/messages/${messageId}/reactions`,
+    { emoji }
+  );
+  return data as { ok: true };
+}
+
+export async function unreactToMessage(
+  channelId: string,
+  messageId: string,
+  emoji: string
+) {
+  // axios DELETE with body → via { data: ... }
+  const { data } = await api.delete(
+    `/channels/${channelId}/messages/${messageId}/reactions`,
+    { data: { emoji } }
+  );
+  return data as { ok: true } | undefined;
+}
+
 // ---- Direct Messages ----
 export async function listDirectChannels() {
   const { data } = await api.get("/channels/direct");

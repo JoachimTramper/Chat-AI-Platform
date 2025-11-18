@@ -10,6 +10,11 @@ export type Channel = {
   }>;
 };
 
+export type MessageReaction = {
+  emoji: string;
+  userId: string;
+};
+
 export type Message = {
   id: string;
   content: string | null;
@@ -27,6 +32,7 @@ export type Message = {
     displayName: string;
     avatarUrl: string | null;
   };
+  reactions?: MessageReaction[];
 };
 
 import type { MeResponse } from "@/lib/api";

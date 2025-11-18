@@ -63,4 +63,29 @@ export class MessagesController {
     await this.svc.softDelete(messageId, user.sub);
     // 204 No Content
   }
+
+  // REACT emoji
+  @Post(':messageId/reactions')
+  async react(
+    @Param('id') _channelId: string,
+    @Param('messageId') messageId: string,
+    @Body('emoji') emoji: string,
+    @User() user: { sub: string },
+  ) {
+    await this.svc.addReaction(messageId, user.sub, emoji);
+    return { ok: true };
+  }
+
+  // UNREACT
+  @Delete(':messageId/reactions')
+  @HttpCode(204)
+  async unreact(
+    @Param('id') _channelId: string,
+    @Param('messageId') messageId: string,
+    @Body('emoji') emoji: string,
+    @User() user: { sub: string },
+  ) {
+    await this.svc.removeReaction(messageId, user.sub, emoji);
+    // 204 No Content
+  }
 }

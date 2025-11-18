@@ -16,6 +16,7 @@ export class MessagesService {
 
   async list(channelId: string, take = 50, cursor?: string) {
     const safeTake = Math.min(Math.max(take, 1), 100);
+
     return this.prisma.message.findMany({
       where: { channelId },
       orderBy: { createdAt: 'desc' },
@@ -26,14 +27,25 @@ export class MessagesService {
           select: {
             id: true,
             displayName: true,
-            avatarUrl: true,
+            avatarUrl: true, // 👈 nieuw
           },
         },
         deletedBy: {
           select: {
             id: true,
             displayName: true,
-            avatarUrl: true,
+            avatarUrl: true, // 👈 nieuw
+          },
+        },
+        reactions: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                displayName: true,
+                avatarUrl: true, // 👈 voor nice UI later
+              },
+            },
           },
         },
       },
@@ -55,7 +67,18 @@ export class MessagesService {
           select: {
             id: true,
             displayName: true,
-            avatarUrl: true,
+            avatarUrl: true, // 👈 avatar erbij
+          },
+        },
+        reactions: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                displayName: true,
+                avatarUrl: true,
+              },
+            },
           },
         },
       },
@@ -73,6 +96,15 @@ export class MessagesService {
         displayName: msg.author.displayName,
         avatarUrl: msg.author.avatarUrl ?? null,
       },
+      reactions: msg.reactions.map((r) => ({
+        id: r.id,
+        emoji: r.emoji,
+        user: {
+          id: r.user.id,
+          displayName: r.user.displayName,
+          avatarUrl: r.user.avatarUrl ?? null,
+        },
+      })),
     });
 
     return msg;
@@ -143,6 +175,85 @@ export class MessagesService {
       channelId,
       deletedAt: deleted.deletedAt!.toISOString(),
       deletedById: userId,
+    });
+
+    return { ok: true };
+  }
+
+  // add reaction
+  async addReaction(messageId: string, userId: string, emoji: string) {
+    const trimmed = (emoji ?? '').trim();
+    if (!trimmed) {
+      throw new ForbiddenException('Emoji is required');
+    }
+
+    const msg = await this.prisma.message.findUnique({
+      where: { id: messageId },
+      select: { id: true, channelId: true },
+    });
+    if (!msg) throw new NotFoundException('Message not found');
+
+    // Ensure the same user cannot add the same emoji reaction to the same message twice
+    await this.prisma.messageReaction.upsert({
+      where: {
+        messageId_userId_emoji: {
+          messageId,
+          userId,
+          emoji: trimmed,
+        },
+      },
+      create: {
+        messageId,
+        userId,
+        emoji: trimmed,
+      },
+      update: {},
+    });
+
+    // minimal realtime payload – frontend counts further itself
+    this.ws.server.emit('message.added', {
+      messageId,
+      channelId: msg.channelId,
+      emoji: trimmed,
+      userId,
+    });
+
+    return { ok: true };
+  }
+
+  // remove reaction
+  async removeReaction(messageId: string, userId: string, emoji: string) {
+    const trimmed = (emoji ?? '').trim();
+    if (!trimmed) {
+      throw new ForbiddenException('Emoji is required');
+    }
+
+    const msg = await this.prisma.message.findUnique({
+      where: { id: messageId },
+      select: { id: true, channelId: true },
+    });
+    if (!msg) throw new NotFoundException('Message not found');
+
+    // best-effort delete: if not found, ignore
+    try {
+      await this.prisma.messageReaction.delete({
+        where: {
+          messageId_userId_emoji: {
+            messageId,
+            userId,
+            emoji: trimmed,
+          },
+        },
+      });
+    } catch (e) {
+      // ignore if not found
+    }
+
+    this.ws.server.emit('message.removed', {
+      messageId,
+      channelId: msg.channelId,
+      emoji: trimmed,
+      userId,
     });
 
     return { ok: true };

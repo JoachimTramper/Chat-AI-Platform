@@ -7,6 +7,7 @@ import { MessageItem } from "./MessageItem";
 type Props = {
   msgs: Message[];
   meId: string;
+  channelId: string;
   listRef: RefObject<HTMLDivElement | null>;
   editingId: string | null;
   editText: string;
@@ -16,13 +17,15 @@ type Props = {
   onCancelEdit: () => void;
   onDelete: (m: Message) => void;
   formatDateTime: (iso: string) => string;
-  // 👇 nieuwe prop:
   onScroll: (e: UIEvent<HTMLDivElement>) => void;
+  isDirect: boolean;
+  lastReadMessageIdByOthers: string | null;
 };
 
 export function MessageList({
   msgs,
   meId,
+  channelId,
   listRef,
   editingId,
   editText,
@@ -33,28 +36,53 @@ export function MessageList({
   onDelete,
   formatDateTime,
   onScroll,
+  isDirect,
+  lastReadMessageIdByOthers,
 }: Props) {
+  const safeMsgs = msgs ?? [];
+
+  // index of the message the other person last read
+  const lastReadIndex = lastReadMessageIdByOthers
+    ? safeMsgs.findIndex((m) => m.id === lastReadMessageIdByOthers)
+    : -1;
+
   return (
     <div
       ref={listRef}
       onScroll={onScroll}
       className="flex-1 overflow-auto p-4 space-y-3"
     >
-      {msgs.map((m) => (
-        <MessageItem
-          key={m.id}
-          m={m}
-          isMe={m.authorId === meId}
-          isEditing={editingId === m.id}
-          onStartEdit={() => onStartEdit(m)}
-          onSaveEdit={() => onSaveEdit(m)}
-          onCancelEdit={onCancelEdit}
-          onDelete={() => onDelete(m)}
-          editText={editText}
-          setEditText={setEditText}
-          formatDateTime={formatDateTime}
-        />
-      ))}
+      {safeMsgs.map((m, index) => {
+        // "Seen" when:
+        // - DM
+        // - there's a lastReadIndex
+        // - this message is at or before lastReadIndex
+        // - and was sent by me
+        const showSeen =
+          isDirect &&
+          lastReadIndex >= 0 &&
+          index <= lastReadIndex &&
+          m.authorId === meId;
+
+        return (
+          <MessageItem
+            key={m.id}
+            m={m}
+            meId={meId}
+            channelId={channelId}
+            isMe={m.authorId === meId}
+            isEditing={editingId === m.id}
+            onStartEdit={() => onStartEdit(m)}
+            onSaveEdit={() => onSaveEdit(m)}
+            onCancelEdit={onCancelEdit}
+            onDelete={() => onDelete(m)}
+            editText={editText}
+            setEditText={setEditText}
+            formatDateTime={formatDateTime}
+            showSeen={showSeen}
+          />
+        );
+      })}
     </div>
   );
 }

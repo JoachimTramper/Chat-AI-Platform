@@ -2,9 +2,12 @@
 
 import type { Message } from "../types";
 import { Avatar } from "./Avatar";
+import { MessageReactionsBar } from "./MessageReactionsBar";
 
 export function MessageItem({
   m,
+  meId,
+  channelId,
   isMe,
   isEditing,
   onStartEdit,
@@ -14,8 +17,11 @@ export function MessageItem({
   editText,
   setEditText,
   formatDateTime,
+  showSeen,
 }: {
   m: Message;
+  meId: string;
+  channelId: string;
   isMe: boolean;
   isEditing: boolean;
   onStartEdit: () => void;
@@ -25,6 +31,7 @@ export function MessageItem({
   editText: string;
   setEditText: (v: string) => void;
   formatDateTime: (iso: string) => string;
+  showSeen?: boolean;
 }) {
   const isDeleted = !!m.deletedAt;
   const isEdited =
@@ -33,14 +40,14 @@ export function MessageItem({
 
   return (
     <div className="group flex gap-3 px-2 py-2 rounded-md hover:bg-gray-50">
-      {/* Avatar links */}
+      {/* Avatar left */}
       <Avatar
         name={m.author.displayName}
         avatarUrl={m.author.avatarUrl ?? null}
         size={32}
       />
 
-      {/* Tekst rechts */}
+      {/* Text right */}
       <div className="flex-1">
         <div className="text-xs text-gray-500 flex items-center gap-2">
           <span className="font-medium text-gray-700">
@@ -53,6 +60,7 @@ export function MessageItem({
           )}
         </div>
 
+        {/* content / editing / deleted */}
         {isDeleted ? (
           <div className="text-sm text-gray-400 italic">
             Message deleted
@@ -84,23 +92,20 @@ export function MessageItem({
             </button>
           </div>
         ) : (
-          <div className="text-sm mt-1 whitespace-pre-wrap">{m.content}</div>
-        )}
+          <div className="mt-1 flex items-end gap-2">
+            <div className="text-sm whitespace-pre-wrap flex-1">
+              {m.content}
+            </div>
 
-        {!isDeleted && isMe && !isEditing && (
-          <div className="mt-1 hidden gap-2 group-hover:flex">
-            <button
-              className="text-xs text-blue-600 hover:underline"
-              onClick={onStartEdit}
-            >
-              Edit
-            </button>
-            <button
-              className="text-xs text-red-600 hover:underline"
-              onClick={onDelete}
-            >
-              Delete
-            </button>
+            {/* Sent */}
+            {isMe && !isDeleted && (
+              <div className="text-[11px] text-gray-400 flex items-center gap-1 shrink-0">
+                <span aria-hidden>{showSeen ? "✓✓" : "✓"}</span>
+                <span className="hidden sm:inline">
+                  {showSeen ? "Seen" : "Sent"}
+                </span>
+              </div>
+            )}
           </div>
         )}
       </div>
