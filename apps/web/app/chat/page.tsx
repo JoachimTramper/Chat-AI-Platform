@@ -30,6 +30,12 @@ import { usePresence } from "./hooks/usePresence";
 import { useUnread } from "./hooks/useUnread";
 import { Avatar } from "./components/Avatar";
 
+type ReplyTarget = {
+  id: string;
+  authorName: string;
+  content: string | null;
+};
+
 export default function ChatPage() {
   const router = useRouter();
   const [user, setUser] = useState<Me | null>(null);
@@ -43,6 +49,7 @@ export default function ChatPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
 
   // auth guard
   useEffect(() => {
@@ -208,8 +215,10 @@ export default function ChatPage() {
   async function handleSend() {
     if (!canSend || !active) return;
     try {
-      await send(text.trim());
+      // second argument is replyToMessageId
+      await send(text.trim(), replyTo?.id ?? undefined);
       setText("");
+      setReplyTo(null); // clear reply target after sending
     } catch (e) {
       console.error("Failed to send message:", e);
     }
@@ -245,6 +254,14 @@ export default function ChatPage() {
     } catch (e) {
       console.error("Failed to delete message:", e);
     }
+  }
+
+  function handleReply(message: Message) {
+    setReplyTo({
+      id: message.id,
+      authorName: message.author.displayName,
+      content: message.content ?? null,
+    });
   }
 
   function handleTypingInput(v: string) {
@@ -456,6 +473,7 @@ export default function ChatPage() {
             onSaveEdit={(m) => active && saveEdit(active, m.id)}
             onCancelEdit={cancelEdit}
             onDelete={(m) => active && removeMessage(active, m.id)}
+            onReply={(m) => handleReply(m)}
             formatDateTime={formatDateTime}
             onScroll={handleScroll}
             isDirect={activeChannel?.isDirect ?? false}
@@ -472,6 +490,8 @@ export default function ChatPage() {
             value={text}
             onChange={handleTypingInput}
             onSend={handleSend}
+            replyTo={replyTo}
+            onCancelReply={() => setReplyTo(null)}
           />
         </main>
       </div>

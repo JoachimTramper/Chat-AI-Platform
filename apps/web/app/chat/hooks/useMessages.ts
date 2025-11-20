@@ -44,10 +44,10 @@ export function useMessages(
       try {
         const raw = await listMessages(active!);
 
-        const normalized = raw.reverse().map((m) => ({
+        const normalized = raw.reverse().map((m: any) => ({
           ...m,
-          reactions: (m as any).reactions
-            ? (m as any).reactions.map((r: any) => ({
+          reactions: m.reactions
+            ? m.reactions.map((r: any) => ({
                 emoji: r.emoji,
                 userId: r.userId,
               }))
@@ -128,7 +128,17 @@ export function useMessages(
                 displayName: p?.author?.displayName ?? "Someone",
                 avatarUrl: null,
               },
-          reactions: [], // nieuwe messages starten zonder reactions
+          reactions: [],
+          parent: p.parent
+            ? {
+                id: p.parent.id,
+                content: p.parent.content,
+                author: {
+                  id: p.parent.author.id,
+                  displayName: p.parent.author.displayName,
+                },
+              }
+            : null,
         },
       ]);
     };
@@ -268,9 +278,9 @@ export function useMessages(
   }, [msgs, ready, active]);
 
   // Actions with optimistic UI
-  const send = async (text: string) => {
+  const send = async (text: string, replyToMessageId?: string) => {
     if (!active) return;
-    await sendMessage(active, text);
+    await sendMessage(active, text, replyToMessageId);
   };
 
   const edit = async (messageId: string, text: string) => {

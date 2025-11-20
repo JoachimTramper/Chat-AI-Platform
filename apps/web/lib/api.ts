@@ -142,9 +142,14 @@ export async function listMessages(
   return data as Message[];
 }
 
-export async function sendMessage(channelId: string, content?: string) {
+export async function sendMessage(
+  channelId: string,
+  content?: string,
+  replyToMessageId?: string
+) {
   const { data } = await api.post(`/channels/${channelId}/messages`, {
     content,
+    replyToMessageId,
   });
   return data;
 }

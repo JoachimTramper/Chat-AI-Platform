@@ -6,4 +6,8 @@ export class CreateMessageDto {
   @IsString()
   @MaxLength(5000)
   content?: string;
+
+  @IsOptional()
+  @IsString()
+  replyToMessageId?: string;
 }

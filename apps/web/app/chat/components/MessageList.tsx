@@ -20,6 +20,7 @@ type Props = {
   onScroll: (e: UIEvent<HTMLDivElement>) => void;
   isDirect: boolean;
   lastReadMessageIdByOthers: string | null;
+  onReply: (m: Message) => void;
 };
 
 export function MessageList({
@@ -34,6 +35,7 @@ export function MessageList({
   onSaveEdit,
   onCancelEdit,
   onDelete,
+  onReply,
   formatDateTime,
   onScroll,
   isDirect,
@@ -71,11 +73,13 @@ export function MessageList({
             meId={meId}
             channelId={channelId}
             isMe={m.authorId === meId}
+            isDirect={isDirect}
             isEditing={editingId === m.id}
             onStartEdit={() => onStartEdit(m)}
             onSaveEdit={() => onSaveEdit(m)}
             onCancelEdit={onCancelEdit}
             onDelete={() => onDelete(m)}
+            onReply={() => onReply(m)}
             editText={editText}
             setEditText={setEditText}
             formatDateTime={formatDateTime}

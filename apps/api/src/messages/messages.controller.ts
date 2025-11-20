@@ -38,7 +38,12 @@ export class MessagesController {
     @Body() dto: CreateMessageDto, // { content?: string }
     @User() user: { sub: string; email: string }, // from JWT
   ) {
-    return this.svc.create(channelId, user.sub, dto.content);
+    return this.svc.create(
+      channelId,
+      user.sub,
+      dto.content,
+      dto.replyToMessageId,
+    );
   }
 
   // EDIT message

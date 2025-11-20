@@ -58,6 +58,10 @@ model Message {
 
   reactions MessageReaction[]
 
+  parent    Message?   @relation("MessageReplies", fields: [parentId], references: [id])
+  parentId  String?
+  replies   Message[]  @relation("MessageReplies")
+
   @@index([channelId, createdAt(sort: Desc)])
   @@index([channelId, deletedAt])
 }

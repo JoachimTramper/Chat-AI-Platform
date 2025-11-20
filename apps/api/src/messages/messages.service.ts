@@ -27,23 +27,34 @@ export class MessagesService {
           select: {
             id: true,
             displayName: true,
-            avatarUrl: true, // 👈 nieuw
+            avatarUrl: true,
           },
         },
         deletedBy: {
           select: {
             id: true,
             displayName: true,
-            avatarUrl: true, // 👈 nieuw
+            avatarUrl: true,
           },
         },
+
+        parent: {
+          select: {
+            id: true,
+            content: true,
+            author: {
+              select: { id: true, displayName: true },
+            },
+          },
+        },
+
         reactions: {
           include: {
             user: {
               select: {
                 id: true,
                 displayName: true,
-                avatarUrl: true, // 👈 voor nice UI later
+                avatarUrl: true,
               },
             },
           },
@@ -52,22 +63,56 @@ export class MessagesService {
     });
   }
 
-  async create(channelId: string, authorId: string, content?: string) {
+  async create(
+    channelId: string,
+    authorId: string,
+    content?: string,
+    replyToMessageId?: string,
+  ) {
     // 1) channel exists?
     const exists = await this.prisma.channel.findUnique({
       where: { id: channelId },
     });
     if (!exists) throw new NotFoundException('Channel not found');
 
-    // 2) create
+    // 2) parent check (optioneel, voor replies)
+    let parentId: string | undefined = undefined;
+    if (replyToMessageId) {
+      const parent = await this.prisma.message.findUnique({
+        where: { id: replyToMessageId },
+        select: { id: true, channelId: true },
+      });
+
+      if (!parent || parent.channelId !== channelId) {
+        throw new ForbiddenException('Invalid reply parent');
+      }
+
+      parentId = parent.id;
+    }
+
+    // 3) create message (incl. parent, author, reactions)
     const msg = await this.prisma.message.create({
-      data: { channelId, authorId, content: content ?? '' },
+      data: {
+        channelId,
+        authorId,
+        content: content ?? '',
+        parentId,
+      },
       include: {
         author: {
           select: {
             id: true,
             displayName: true,
-            avatarUrl: true, // 👈 avatar erbij
+            avatarUrl: true,
+          },
+        },
+        parent: {
+          select: {
+            id: true,
+            content: true,
+            author: {
+              select: { id: true, displayName: true },
+            },
           },
         },
         reactions: {
@@ -84,7 +129,7 @@ export class MessagesService {
       },
     });
 
-    // 3) realtime push (full payload)
+    // 4) realtime push (full payload incl. parent + reactions)
     this.ws.server.emit('message.created', {
       id: msg.id,
       channelId: msg.channelId,
@@ -96,6 +141,16 @@ export class MessagesService {
         displayName: msg.author.displayName,
         avatarUrl: msg.author.avatarUrl ?? null,
       },
+      parent: msg.parent
+        ? {
+            id: msg.parent.id,
+            content: msg.parent.content,
+            author: {
+              id: msg.parent.author.id,
+              displayName: msg.parent.author.displayName,
+            },
+          }
+        : null,
       reactions: msg.reactions.map((r) => ({
         id: r.id,
         emoji: r.emoji,

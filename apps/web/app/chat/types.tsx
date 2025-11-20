@@ -15,6 +15,15 @@ export type MessageReaction = {
   userId: string;
 };
 
+export type MessageParent = {
+  id: string;
+  content: string | null;
+  author: {
+    id: string;
+    displayName: string;
+  };
+};
+
 export type Message = {
   id: string;
   content: string | null;
@@ -33,6 +42,7 @@ export type Message = {
     avatarUrl: string | null;
   };
   reactions?: MessageReaction[];
+  parent?: MessageParent | null;
 };
 
 import type { MeResponse } from "@/lib/api";
