@@ -1,6 +1,12 @@
 "use client";
 
-import type { RefObject, UIEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type RefObject,
+  type UIEvent,
+} from "react";
 import type { Message } from "../types";
 import { MessageItem } from "./MessageItem";
 
@@ -21,6 +27,8 @@ type Props = {
   isDirect: boolean;
   lastReadMessageIdByOthers: string | null;
   onReply: (m: Message) => void;
+  scrollToMessageId?: string | null;
+  onScrolledToMessage?: () => void;
 };
 
 export function MessageList({
@@ -40,13 +48,47 @@ export function MessageList({
   onScroll,
   isDirect,
   lastReadMessageIdByOthers,
+  scrollToMessageId,
+  onScrolledToMessage,
 }: Props) {
   const safeMsgs = msgs ?? [];
 
-  // index of the message the other person last read
+  // map messageId -> DOM element
+  const messageRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // which message is currently highlighted (jump target)
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
+
   const lastReadIndex = lastReadMessageIdByOthers
     ? safeMsgs.findIndex((m) => m.id === lastReadMessageIdByOthers)
     : -1;
+
+  // scroll when a jump target is set
+  useEffect(() => {
+    if (!scrollToMessageId) return;
+
+    const el = messageRefs.current[scrollToMessageId];
+    if (!el) return;
+
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+
+    // mark this message as highlighted
+    setHighlightedId(scrollToMessageId);
+
+    // let ChatPage know it's processed
+    onScrolledToMessage?.();
+  }, [scrollToMessageId, onScrolledToMessage]);
+
+  // auto-clear highlight after 1.5s
+  useEffect(() => {
+    if (!highlightedId) return;
+
+    const timeout = window.setTimeout(() => {
+      setHighlightedId(null);
+    }, 1500);
+
+    return () => window.clearTimeout(timeout);
+  }, [highlightedId]);
 
   return (
     <div
@@ -66,25 +108,36 @@ export function MessageList({
           index <= lastReadIndex &&
           m.authorId === meId;
 
+        const isHighlighted = highlightedId === m.id;
+
         return (
-          <MessageItem
+          <div
             key={m.id}
-            m={m}
-            meId={meId}
-            channelId={channelId}
-            isMe={m.authorId === meId}
-            isDirect={isDirect}
-            isEditing={editingId === m.id}
-            onStartEdit={() => onStartEdit(m)}
-            onSaveEdit={() => onSaveEdit(m)}
-            onCancelEdit={onCancelEdit}
-            onDelete={() => onDelete(m)}
-            onReply={() => onReply(m)}
-            editText={editText}
-            setEditText={setEditText}
-            formatDateTime={formatDateTime}
-            showSeen={showSeen}
-          />
+            ref={(el) => {
+              messageRefs.current[m.id] = el;
+            }}
+            className={
+              isHighlighted ? "ring-2 ring-blue-400 bg-blue-50 rounded-md" : ""
+            }
+          >
+            <MessageItem
+              m={m}
+              meId={meId}
+              channelId={channelId}
+              isMe={m.authorId === meId}
+              isDirect={isDirect}
+              isEditing={editingId === m.id}
+              onStartEdit={() => onStartEdit(m)}
+              onSaveEdit={() => onSaveEdit(m)}
+              onCancelEdit={onCancelEdit}
+              onDelete={() => onDelete(m)}
+              onReply={() => onReply(m)}
+              editText={editText}
+              setEditText={setEditText}
+              formatDateTime={formatDateTime}
+              showSeen={showSeen}
+            />
+          </div>
         );
       })}
     </div>

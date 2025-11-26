@@ -16,6 +16,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { User } from '../auth/decorators/user.decorator';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { UpdateMessageDto } from './dto/update-message.dto';
+import { SearchMessagesDto } from './dto/search-messages.dto';
 
 @Controller('channels/:id/messages')
 @UseGuards(JwtAuthGuard)
@@ -30,6 +31,12 @@ export class MessagesController {
   ) {
     const n = take ? Number(take) : 50;
     return this.svc.list(channelId, Number.isFinite(n) ? n : 50, cursor);
+  }
+
+  @Get('search')
+  search(@Param('id') channelId: string, @Query() dto: SearchMessagesDto) {
+    const take = dto.take ?? 50;
+    return this.svc.search(channelId, dto.query, take, dto.cursor);
   }
 
   @Post()

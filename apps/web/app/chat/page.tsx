@@ -24,11 +24,19 @@ import type { ChannelWithUnread, Message, Me } from "./types";
 import { MessageList } from "./components/MessageList";
 import { Composer } from "./components/Composer";
 import { Sidebar } from "./components/Sidebar";
+import { ChatHeader } from "./components/ChatHeader";
+import { ChannelSearch } from "./components/ChannelSearch";
 import { useMessages } from "./hooks/useMessages";
 import { useTyping } from "./hooks/useTyping";
 import { usePresence } from "./hooks/usePresence";
 import { useUnread } from "./hooks/useUnread";
-import { Avatar } from "./components/Avatar";
+import {
+  extractMentionUserIds,
+  formatDateTime,
+  formatLastOnline,
+  mergeChannelsById,
+  type MentionCandidate,
+} from "./utils/utils";
 
 type ReplyTarget = {
   id: string;
@@ -50,6 +58,9 @@ export default function ChatPage() {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
+  const [scrollToMessageId, setScrollToMessageId] = useState<string | null>(
+    null
+  );
 
   // auth guard
   useEffect(() => {
@@ -69,11 +80,11 @@ export default function ChatPage() {
         if (!items || items.length === 0) {
           const c = await createChannel("general");
           const next = await listChannelsWithUnread();
-          setChannels(mergeById([], next));
+          setChannels(mergeChannelsById([], next));
           setActive(next[0]?.id ?? c.id);
           return;
         }
-        setChannels(mergeById([], items));
+        setChannels(mergeChannelsById([], items));
         setActive(items[0]?.id ?? null);
       } catch (e) {
         console.error("Failed to load channels with unread:", e);
@@ -143,21 +154,10 @@ export default function ChatPage() {
             name: other?.displayName || dm.name || "Direct",
             isDirect: true,
             members: dm.members ?? [],
-          };
+          } as ChannelWithUnread;
         });
 
-        setChannels((prev) => {
-          const byId = new Map(prev.map((c) => [c.id, c]));
-
-          for (const dm of normalized) {
-            const existing = byId.get(dm.id);
-            // merge: keep existing props (such as unreadCount),
-            // but supplement/override with DM info (members, isDirect, name)
-            byId.set(dm.id, existing ? { ...existing, ...dm } : dm);
-          }
-
-          return Array.from(byId.values());
-        });
+        setChannels((prev) => mergeChannelsById(prev, normalized));
       } catch (e) {
         console.error("Failed to load DMs:", e);
       }
@@ -170,44 +170,6 @@ export default function ChatPage() {
     [user, active, text]
   );
 
-  const formatLastOnline = (d?: string | null) => {
-    if (!d) return "";
-    const then = new Date(d).getTime();
-    const diff = Math.floor((Date.now() - then) / 1000);
-    if (diff < 60) return "Last online just now";
-    const m = Math.floor(diff / 60);
-    if (m < 60) return `Last online ${m} min${m !== 1 ? "s" : ""} ago`;
-    const h = Math.floor(m / 60);
-    if (h < 24) return `Last online ${h} hour${h !== 1 ? "s" : ""} ago`;
-    const dys = Math.floor(h / 24);
-    if (dys < 7) return `Last online ${dys} day${dys !== 1 ? "s" : ""} ago`;
-    const dt = new Date(d);
-    return `Last online ${dt.toLocaleDateString()} ${dt.toLocaleTimeString()}`;
-  };
-
-  const formatDateTime = (iso: string) => {
-    const d = new Date(iso);
-    const date = d.toLocaleDateString(undefined, {
-      year: "numeric",
-      month: "short",
-      day: "2-digit",
-    });
-    const time = d.toLocaleTimeString(undefined, {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-    return `${date} ${time}`;
-  };
-
-  function mergeById(prev: ChannelWithUnread[], next: ChannelWithUnread[]) {
-    const byId = new Map(prev.map((x) => [x.id, x]));
-    for (const it of next) {
-      const old = byId.get(it.id);
-      byId.set(it.id, old ? { ...old, ...it } : it);
-    }
-    return Array.from(byId.values());
-  }
-
   async function onCreateChannel() {
     if (!newChannel.trim()) return;
     try {
@@ -219,37 +181,6 @@ export default function ChatPage() {
     } finally {
       setCreating(false);
     }
-  }
-
-  function extractMentionUserIds(
-    content: string,
-    candidates: Array<{ id: string; displayName: string }>
-  ): string[] {
-    if (!candidates.length || !content) return [];
-
-    const regex = /@([A-Za-z0-9_]+)/g;
-    const names = new Set<string>();
-    let match: RegExpExecArray | null = null;
-
-    while ((match = regex.exec(content)) !== null) {
-      const username = match[1];
-      if (username) {
-        names.add(username);
-      }
-    }
-
-    if (names.size === 0) return [];
-
-    const byName = new Map(
-      candidates.map((m) => [m.displayName.toLowerCase(), m.id])
-    );
-
-    const ids: string[] = [];
-    for (const name of names) {
-      const id = byName.get(name.toLowerCase());
-      if (id) ids.push(id);
-    }
-    return ids;
   }
 
   async function handleSend() {
@@ -340,7 +271,7 @@ export default function ChatPage() {
                 name: label,
                 isDirect: true,
                 members: dm.members ?? [],
-              },
+              } as ChannelWithUnread,
             ]
       );
       setActive(dm.id);
@@ -387,16 +318,14 @@ export default function ChatPage() {
   const regularChannels = channels.filter((c) => !c.isDirect);
   const dmChannels = channels.filter((c) => c.isDirect);
 
-  const mentionCandidates =
+  const mentionCandidates: MentionCandidate[] =
     activeChannel?.members && activeChannel.members.length > 0
       ? activeChannel.members.map((m) => ({
           id: m.id,
           displayName: m.displayName,
         }))
       : [
-          // always yourself
           { id: user.sub, displayName: user.displayName },
-          // plus everyone is known via presence
           ...othersOnline.map((u) => ({
             id: u.id,
             displayName: u.displayName,
@@ -410,80 +339,17 @@ export default function ChatPage() {
   return (
     <div className="h-dvh overflow-hidden flex flex-col">
       {/* header + avatar button */}
-      <header className="border-b bg-gray-50 px-3 md:px-4 py-2 flex items-center justify-between">
-        <div className="flex items-center gap-2 text-base font-semibold min-w-0">
-          {/* mobile menu-button */}
-          <button
-            type="button"
-            className="md:hidden mr-1 text-xl"
-            onClick={() => setSidebarOpen((v) => !v)}
-            aria-label="Toggle sidebar"
-          >
-            ☰
-          </button>
-
-          {activeChannel?.isDirect ? (
-            <>
-              <span aria-hidden className="hidden sm:inline">
-                💬
-              </span>
-              <span className="truncate max-w-[60vw] md:max-w-none">
-                Direct message with {activeChannel?.name ?? "Unknown"}
-              </span>
-            </>
-          ) : (
-            <>
-              <span aria-hidden className="hidden sm:inline">
-                #
-              </span>
-              <span className="truncate max-w-[60vw] md:max-w-none">
-                {activeChannel?.name ?? "Chat"}
-              </span>
-            </>
-          )}
-        </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            className="flex items-center gap-2 rounded-full px-2 py-1 hover:bg-gray-100"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={avatarUploading}
-          >
-            <Avatar
-              name={user.displayName}
-              avatarUrl={user.avatarUrl}
-              size={28}
-            />
-            <span className="hidden sm:inline text-sm text-gray-700">
-              {avatarUploading ? "Uploading..." : user.displayName}
-            </span>
-          </button>
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleAvatarFileChange}
-          />
-
-          <button
-            type="button"
-            className="text-xs text-gray-500 hover:underline"
-            onClick={handleRemoveAvatar}
-          >
-            Remove avatar
-          </button>
-
-          <button
-            className="text-sm text-gray-600 hover:text-red-600 underline-offset-2 hover:underline"
-            onClick={handleLogout}
-          >
-            Logout
-          </button>
-        </div>
-      </header>
+      <ChatHeader
+        user={user}
+        activeChannel={activeChannel}
+        fileInputRef={fileInputRef}
+        avatarUploading={avatarUploading}
+        onAvatarChange={handleAvatarFileChange}
+        onRemoveAvatar={handleRemoveAvatar}
+        onLogout={handleLogout}
+        sidebarOpen={sidebarOpen}
+        setSidebarOpen={setSidebarOpen}
+      />
 
       {/* main layout */}
       <div className="flex-1 min-h-0 flex">
@@ -508,7 +374,7 @@ export default function ChatPage() {
             active={active}
             setActive={(id) => {
               setActive(id);
-              setSidebarOpen(false); // close when selecting channel on mobile
+              setSidebarOpen(false);
             }}
             newChannel={newChannel}
             setNewChannel={setNewChannel}
@@ -522,7 +388,20 @@ export default function ChatPage() {
         </div>
 
         {/* Main */}
-        <main className="flex-1 grid grid-rows-[1fr_auto] min-h-0">
+        <main className="flex-1 grid grid-rows-[auto_1fr_auto] min-h-0">
+          {/* Search bar */}
+          <div className="px-3 md:px-4 py-2 border-b bg-white">
+            {active && (
+              <ChannelSearch
+                channelId={active}
+                onJumpToMessage={(messageId) => {
+                  setScrollToMessageId(messageId);
+                }}
+              />
+            )}
+          </div>
+
+          {/* Messages */}
           <MessageList
             msgs={msgs}
             meId={user.sub}
@@ -540,14 +419,18 @@ export default function ChatPage() {
             onScroll={handleScroll}
             isDirect={activeChannel?.isDirect ?? false}
             lastReadMessageIdByOthers={lastReadMessageIdByOthers}
+            scrollToMessageId={scrollToMessageId}
+            onScrolledToMessage={() => setScrollToMessageId(null)}
           />
 
+          {/* Typing indicator */}
           {typingLabel && (
             <div className="px-3 md:px-4 py-1 text-sm text-gray-600 shrink-0 bg-white border-t">
               {typingLabel}
             </div>
           )}
 
+          {/* Composer */}
           <Composer
             value={text}
             onChange={handleTypingInput}

@@ -76,6 +76,73 @@ export class MessagesService {
     });
   }
 
+  async search(channelId: string, query: string, take = 50, cursor?: string) {
+    const safeTake = Math.min(Math.max(take, 1), 100);
+
+    return this.prisma.message.findMany({
+      where: {
+        channelId,
+        deletedAt: null, // exclude soft-deleted
+        content: {
+          not: null,
+          contains: query,
+          mode: 'insensitive',
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: safeTake,
+      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+      include: {
+        author: {
+          select: {
+            id: true,
+            displayName: true,
+            avatarUrl: true,
+          },
+        },
+        deletedBy: {
+          select: {
+            id: true,
+            displayName: true,
+            avatarUrl: true,
+          },
+        },
+        parent: {
+          select: {
+            id: true,
+            content: true,
+            author: {
+              select: { id: true, displayName: true },
+            },
+          },
+        },
+        reactions: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                displayName: true,
+                avatarUrl: true,
+              },
+            },
+          },
+        },
+        mentions: {
+          select: {
+            userId: true,
+            user: {
+              select: {
+                id: true,
+                displayName: true,
+                avatarUrl: true,
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
   async create(
     channelId: string,
     authorId: string,

@@ -142,6 +142,26 @@ export async function listMessages(
   return data as Message[];
 }
 
+// Search messages in a channel
+export async function searchMessages(
+  channelId: string,
+  opts: { query: string; take?: number; cursor?: string }
+): Promise<Message[]> {
+  const params = new URLSearchParams();
+  params.set("query", opts.query);
+  if (opts.take) params.set("take", String(opts.take));
+  if (opts.cursor) params.set("cursor", opts.cursor);
+
+  const qs = params.toString();
+  const { data } = await api.get(
+    `/channels/${channelId}/messages/search${qs ? `?${qs}` : ""}`
+  );
+
+  console.log("[api.searchMessages] raw data:", data);
+
+  return data as Message[];
+}
+
 export async function sendMessage(
   channelId: string,
   content?: string,
