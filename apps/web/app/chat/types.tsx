@@ -73,6 +73,7 @@ export type OnlineUser = {
   displayName: string;
   lastSeen?: string | null;
   avatarUrl: string | null;
+  status?: "online" | "idle";
 };
 
 export type ChannelWithUnread = Channel & { unread?: number };

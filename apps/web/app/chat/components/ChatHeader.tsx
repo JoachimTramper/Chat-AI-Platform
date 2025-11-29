@@ -3,6 +3,15 @@
 import { Avatar } from "./Avatar";
 import type { Me, ChannelWithUnread } from "../types";
 
+type DmPeer = {
+  id: string;
+  displayName: string;
+  avatarUrl: string | null;
+  isOnline: boolean;
+  isIdle: boolean;
+  statusText: string;
+};
+
 type Props = {
   user: Me;
   activeChannel: ChannelWithUnread | undefined;
@@ -13,6 +22,7 @@ type Props = {
   onLogout: () => void;
   sidebarOpen: boolean;
   setSidebarOpen: (v: boolean) => void;
+  dmPeer?: DmPeer | null;
 };
 
 export function ChatHeader({
@@ -25,6 +35,7 @@ export function ChatHeader({
   onLogout,
   sidebarOpen,
   setSidebarOpen,
+  dmPeer,
 }: Props) {
   return (
     <header className="border-b bg-gray-50 px-3 md:px-4 py-2 flex items-center justify-between">
@@ -39,16 +50,34 @@ export function ChatHeader({
           ☰
         </button>
 
-        {activeChannel?.isDirect ? (
-          <>
-            <span aria-hidden className="hidden sm:inline">
-              💬
-            </span>
-            <span className="truncate max-w-[60vw] md:max-w-none">
-              Direct message with {activeChannel?.name ?? "Unknown"}
-            </span>
-          </>
+        {activeChannel?.isDirect && dmPeer ? (
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="relative">
+              <Avatar
+                name={dmPeer.displayName}
+                avatarUrl={dmPeer.avatarUrl}
+                size={32}
+              />
+              <span
+                className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border border-white ${
+                  dmPeer.isOnline
+                    ? dmPeer.isIdle
+                      ? "bg-yellow-400"
+                      : "bg-green-500"
+                    : "bg-gray-300"
+                }`}
+              />
+            </div>
+
+            <div className="min-w-0">
+              <div className="font-semibold truncate">{dmPeer.displayName}</div>
+              <div className="text-xs text-gray-500 truncate">
+                {dmPeer.statusText}
+              </div>
+            </div>
+          </div>
         ) : (
+          // fallback: channel view
           <>
             <span aria-hidden className="hidden sm:inline">
               #

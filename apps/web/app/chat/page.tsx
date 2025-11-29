@@ -376,6 +376,47 @@ export default function ChatPage() {
   const regularChannels = channels.filter((c) => !c.isDirect);
   const dmChannels = channels.filter((c) => c.isDirect);
 
+  // Presence info for active DM
+  const dmPeer =
+    activeChannel && activeChannel.isDirect && user
+      ? (() => {
+          const member = activeChannel.members?.find((m) => m.id !== user.sub);
+          if (!member) return null;
+
+          const onlineEntry = othersOnline.find((u) => u.id === member.id);
+          const recent = recently.find((u) => u.id === member.id);
+
+          let status: "online" | "idle" | "offline" = "offline";
+          if (onlineEntry) {
+            status = onlineEntry.status === "idle" ? "idle" : "online";
+          } else if (recent) {
+            status = "offline";
+          }
+
+          const statusText =
+            status === "online"
+              ? "Online"
+              : status === "idle"
+                ? "Idle"
+                : recent
+                  ? formatLastOnline(recent.lastSeen)
+                  : "Offline";
+
+          return {
+            id: member.id,
+            displayName: member.displayName,
+            avatarUrl:
+              member.avatarUrl ??
+              onlineEntry?.avatarUrl ??
+              recent?.avatarUrl ??
+              null,
+            isOnline: status === "online" || status === "idle",
+            isIdle: status === "idle",
+            statusText,
+          };
+        })()
+      : null;
+
   const mentionCandidates: MentionCandidate[] =
     activeChannel?.members && activeChannel.members.length > 0
       ? activeChannel.members.map((m) => ({
@@ -407,6 +448,7 @@ export default function ChatPage() {
         onLogout={handleLogout}
         sidebarOpen={sidebarOpen}
         setSidebarOpen={setSidebarOpen}
+        dmPeer={dmPeer}
       />
 
       {/* Enable notifications button */}
@@ -452,6 +494,7 @@ export default function ChatPage() {
             recently={recently}
             openDM={openDM}
             formatLastOnline={formatLastOnline}
+            meId={user.sub}
           />
         </div>
 

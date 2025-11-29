@@ -4,6 +4,24 @@ import type { ChannelWithUnread, OnlineUser } from "../types";
 import { MessageCircle } from "lucide-react";
 import { Avatar } from "./Avatar";
 
+type Props = {
+  regularChannels: ChannelWithUnread[];
+  dmChannels: ChannelWithUnread[];
+  active: string | null;
+  setActive: (id: string) => void;
+  newChannel: string;
+  setNewChannel: (v: string) => void;
+  creating: boolean;
+  onCreateChannel: () => Promise<void> | void;
+  othersOnline: OnlineUser[];
+  recently: OnlineUser[];
+  openDM: (id: string) => Promise<void> | void;
+  formatLastOnline: (d?: string | null) => string;
+  meId: string;
+};
+
+type PresenceStatus = "online" | "idle" | "offline";
+
 export function Sidebar({
   regularChannels,
   dmChannels,
@@ -17,20 +35,34 @@ export function Sidebar({
   recently,
   openDM,
   formatLastOnline,
-}: {
-  regularChannels: ChannelWithUnread[];
-  dmChannels: ChannelWithUnread[];
-  active: string | null;
-  setActive: (id: string) => void;
-  newChannel: string;
-  setNewChannel: (v: string) => void;
-  creating: boolean;
-  onCreateChannel: () => Promise<void> | void;
-  othersOnline: OnlineUser[];
-  recently: OnlineUser[];
-  openDM: (id: string) => Promise<void> | void;
-  formatLastOnline: (d?: string | null) => string;
-}) {
+  meId,
+}: Props) {
+  // --- Presence helpers ---
+  function getUserStatus(userId: string): PresenceStatus {
+    const onlineUser = othersOnline.find((u) => u.id === userId);
+    if (onlineUser) {
+      return onlineUser.status === "idle" ? "idle" : "online";
+    }
+
+    if (recently.some((u) => u.id === userId)) {
+      return "offline";
+    }
+
+    return "offline";
+  }
+
+  function getStatusDotClass(status: PresenceStatus): string {
+    switch (status) {
+      case "online":
+        return "bg-green-500";
+      case "idle":
+        return "bg-yellow-400";
+      case "offline":
+      default:
+        return "bg-gray-300";
+    }
+  }
+
   return (
     <aside className="border-r p-3 space-y-4 overflow-auto min-h-0">
       <div className="space-y-6">
@@ -87,7 +119,7 @@ export function Sidebar({
           </div>
         </section>
 
-        {/* DMs */}
+        {/* Direct Messages */}
         <section>
           <h3 className="font-semibold text-xs uppercase tracking-wide text-gray-500">
             Direct Messages
@@ -96,25 +128,64 @@ export function Sidebar({
             {dmChannels.length === 0 ? (
               <div className="text-sm text-gray-500">No DMs yet</div>
             ) : (
-              dmChannels.map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => setActive(c.id)}
-                  className={`flex items-center justify-between w-full text-left px-2 py-1 rounded text-sm border
-                    ${
-                      active === c.id
-                        ? "bg-blue-50 text-blue-700 border-blue-200 font-medium"
-                        : "hover:bg-gray-100 border-transparent"
-                    }`}
-                >
-                  <span>💬 {c.name}</span>
-                  {(c.unread ?? 0) > 0 && (
-                    <span className="ml-auto inline-flex items-center justify-center rounded-full bg-blue-500 text-white text-[10px] font-semibold min-w-4 h-4 px-[5px] leading-none shadow-sm">
-                      {c.unread}
-                    </span>
-                  )}
-                </button>
-              ))
+              dmChannels.map((c) => {
+                // Other person in the DM channel (not myself)
+                const other =
+                  c.members && c.members.length > 0
+                    ? (c.members.find((m) => m.id !== meId) ?? c.members[0])
+                    : undefined;
+
+                const presenceUser =
+                  (other && othersOnline.find((u) => u.id === other.id)) ||
+                  (other && recently.find((u) => u.id === other.id)) ||
+                  null;
+
+                const status: PresenceStatus = other
+                  ? getUserStatus(other.id)
+                  : "offline";
+
+                const dotClass = getStatusDotClass(status);
+
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => setActive(c.id)}
+                    className={`flex items-center justify-between w-full text-left px-2 py-1 rounded text-sm border
+                      ${
+                        active === c.id
+                          ? "bg-blue-50 text-blue-700 border-blue-200 font-medium"
+                          : "hover:bg-gray-100 border-transparent"
+                      }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      {other ? (
+                        <div className="relative">
+                          <Avatar
+                            name={other.displayName}
+                            avatarUrl={
+                              presenceUser?.avatarUrl ?? other.avatarUrl ?? null
+                            }
+                            size={22}
+                          />
+                          <span
+                            className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-white ${dotClass}`}
+                          />
+                        </div>
+                      ) : (
+                        <span className="text-lg">💬</span>
+                      )}
+
+                      <span className="truncate">{c.name}</span>
+                    </div>
+
+                    {(c.unread ?? 0) > 0 && (
+                      <span className="ml-2 inline-flex items-center justify-center rounded-full bg-blue-500 text-white text-[10px] font-semibold min-w-4 h-4 px-[5px] leading-none shadow-sm">
+                        {c.unread}
+                      </span>
+                    )}
+                  </button>
+                );
+              })
             )}
           </div>
         </section>
