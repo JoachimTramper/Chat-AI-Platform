@@ -27,9 +27,11 @@ This app includes:
 
 ## Project Structure
 
+```
 apps/
 ├─ api/ → NestJS backend (REST + WebSocket)
 └─ web/ → Next.js frontend UI
+```
 
 ---
 
