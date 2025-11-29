@@ -33,7 +33,7 @@ apps/
 
 ---
 
-## ✨ Features
+## Features
 
 ### Authentication
 
