@@ -1,6 +1,7 @@
 # Chat AI Platform
 
-A modern full-stack real-time chat platform built with **Next.js**, **NestJS**, **Prisma**, **PostgreSQL**, and **Socket.IO**, organized in a clean **Turborepo** monorepo.
+A full-stack real-time chat platform with a built-in AI assistant,
+built with **Next.js**, **NestJS**, **Prisma**, **PostgreSQL**, and **Socket.IO**.
 
 This app includes:
 
@@ -9,6 +10,7 @@ This app includes:
 - Realtime messaging
 - Full presence (online / idle / offline)
 - Typing indicators
+- AI assistant (mentions & summarization)
 - User avatars + uploads
 - Responsive UI
 - Prisma ORM + PostgreSQL
@@ -62,7 +64,7 @@ Lightweight realtime presence system:
 ### Typing Indicators
 
 - Realtime
-- Supports multiple typers
+- Supports multiple typers and AI Chat Bot
 - Per-channel
 
 ### Avatars & Uploads
@@ -82,6 +84,35 @@ Lightweight realtime presence system:
 
 ---
 
+## AI Chat Bot
+
+The platform includes an integrated AI assistant powered by **Groq LLMs**.
+
+### Capabilities
+
+- Mention-based interaction (`@KennyTheKommunicator`)
+- Natural language responses using Groq's OpenAI-compatible API
+- Context-aware replies using recent chat history
+- Rate-limited to prevent spam
+- Scoped to public channels (not active in DMs)
+
+### Available Commands
+
+- `!help` – show available commands
+- `!rules` – show channel rules
+- `!ping` – simple connectivity test
+- `!whoami` – show your user id
+- `!summarize` – summarize recent messages
+
+### Design choices
+
+- Commands are handled deterministically for speed and reliability
+- LLM is only invoked when needed (mention-based)
+- System prompts enforce concise, language-matching responses
+- No blocking of normal message flow if the AI fails
+
+---
+
 ## Quick Start
 
 1. Clone & install
@@ -92,13 +123,29 @@ Lightweight realtime presence system:
 
 2. Environment variables
 
-   Create a `.env` file at the **repo root** based on these values:
+   The project uses **separate environment files** for backend and frontend.
+   - Backend variables go in `apps/api/.env`
+   - Frontend variables go in `apps/web/.env.local`
 
+   ### Backend (apps/api/.env)
+
+   ```env
    DATABASE_URL="postgresql://postgres:postgres@localhost:5432/chat"
    JWT_SECRET="dev-secret-change-me"
-   NEXT_PUBLIC_API_BASE="http://localhost:3000"
 
-   Tip: Commit a safe `.env.example` with the same keys and dummy values.
+   # AI (Groq)
+
+   GROQ_API_KEY="your-groq-api-key"
+   GROQ_MODEL="llama-3.1-8b-instant"
+   GROQ_BASE_URL="https://api.groq.com/openai/v1"
+   ```
+
+   ### Frontend (apps/web/.env.local)
+
+   ```env
+   NEXT_PUBLIC_API_BASE="http://localhost:3000"
+   PORT=3001
+   ```
 
 3. Start the database (Docker)
 
@@ -170,6 +217,8 @@ volumes:
 - The backend uses a JwtStrategy to validate Bearer tokens on protected routes and socket connections.
 - Prisma manages the schema and migrations; models include User, Channel, and Message.
 - The frontend stores the access token in localStorage and attaches it to requests; an Axios interceptor clears invalid tokens.
+- The AI bot is implemented as a NestJS service and communicates with Groq using an OpenAI-compatible API.
+- The bot is triggered only via mentions or explicit commands to reduce cost and noise.
 
 ---
 
