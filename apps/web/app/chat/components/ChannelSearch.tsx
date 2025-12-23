@@ -35,14 +35,10 @@ export function ChannelSearch({
     setHasSearched(true);
 
     try {
-      console.log("[ChannelSearch] searching for:", trimmed, "in", channelId);
-
       const msgs = await searchMessages(channelId, {
         query: trimmed,
         take: 50,
       });
-
-      console.log("[ChannelSearch] search result:", msgs);
 
       setResults(Array.isArray(msgs) ? msgs : []);
     } catch (err) {

@@ -20,7 +20,7 @@ export function useUnread({
     );
   }, [active, setChannels]);
 
-  // 2) Increment unread on messages in other channels
+  // 2) Realtime unread updates
   useEffect(() => {
     const s = (() => {
       try {
@@ -31,6 +31,8 @@ export function useUnread({
     })();
     if (!s) return;
 
+    // a) message.created (fallback)
+
     const onCreated = (payload: any) => {
       const channelId =
         payload?.channelId ?? payload?.channel?.id ?? payload?.channel_id;
@@ -38,34 +40,50 @@ export function useUnread({
         payload?.author?.id ?? payload?.authorId ?? payload?.userId;
       if (!channelId) return;
 
+      // active channel stays at 0
       if (channelId === active) {
-        // keep active channel at 0
         setChannels((prev) =>
           prev.map((c) => (c.id === channelId ? { ...c, unread: 0 } : c))
         );
         return;
       }
 
-      // other channel: unread++ unless my own message
+      // ignore my own messages
       if (authorId && myId && authorId === myId) return;
 
-      setChannels((prev) => {
-        const exists = prev.some((c) => c.id === channelId);
-        if (!exists) {
-          const label =
-            payload?.channel?.name ?? payload?.author?.displayName ?? "Direct";
-          const isDirect = !!(payload?.channel?.isDirect ?? payload?.isDirect);
-          return [...prev, { id: channelId, name: label, isDirect, unread: 1 }];
-        }
-        return prev.map((c) =>
+      setChannels((prev) =>
+        prev.map((c) =>
           c.id === channelId ? { ...c, unread: (c.unread ?? 0) + 1 } : c
-        );
-      });
+        )
+      );
     };
 
-    s.on("message.created", onCreated);
+    // b) channel.unread (PRIMARY)
+
+    const onUnread = (payload: any) => {
+      const channelId = payload?.channelId;
+      const delta = payload?.delta ?? 1;
+      if (!channelId) return;
+
+      // active channel stays at 0
+      if (channelId === active) {
+        setChannels((prev) =>
+          prev.map((c) => (c.id === channelId ? { ...c, unread: 0 } : c))
+        );
+        return;
+      }
+
+      setChannels((prev) =>
+        prev.map((c) =>
+          c.id === channelId ? { ...c, unread: (c.unread ?? 0) + delta } : c
+        )
+      );
+    };
+
+    s.on("channel.unread", onUnread);
+
     return () => {
-      s.off("message.created", onCreated);
+      s.off("channel.unread", onUnread);
     };
   }, [active, myId, setChannels]);
 }

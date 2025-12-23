@@ -23,16 +23,29 @@ export function formatLastOnline(d?: string | null): string {
 
 export function formatDateTime(iso: string): string {
   const d = new Date(iso);
+  const now = new Date();
+
+  const startOfDay = (x: Date) =>
+    new Date(x.getFullYear(), x.getMonth(), x.getDate());
+
+  const diffDays =
+    (startOfDay(now).getTime() - startOfDay(d).getTime()) / 86_400_000;
+
+  const time = d.toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  if (diffDays === 0) return `Today at ${time}`;
+  if (diffDays === 1) return `Yesterday at ${time}`;
+
   const date = d.toLocaleDateString(undefined, {
     year: "numeric",
     month: "short",
     day: "2-digit",
   });
-  const time = d.toLocaleTimeString(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-  return `${date} ${time}`;
+
+  return `${date} at ${time}`;
 }
 
 export function mergeChannelsById(
@@ -76,4 +89,20 @@ export function extractMentionUserIds(
     if (id) ids.push(id);
   }
   return ids;
+}
+
+export function dayKey(iso: string) {
+  const d = new Date(iso);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+export function formatDayLabel(iso: string) {
+  return new Date(iso).toLocaleDateString(undefined, {
+    month: "long",
+    day: "2-digit",
+    year: "numeric",
+  });
 }

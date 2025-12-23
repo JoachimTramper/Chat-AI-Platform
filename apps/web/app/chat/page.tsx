@@ -106,6 +106,8 @@ export default function ChatPage() {
     })();
   }, []);
 
+  const activeChannel = channels.find((c) => c.id === active);
+
   // hooks
   const {
     msgs,
@@ -119,6 +121,7 @@ export default function ChatPage() {
     lastReadMessageIdByOthers,
     retrySend,
   } = useMessages(active, user?.sub, {
+    lastReadSnapshot: activeChannel?.lastRead ?? null,
     resolveDisplayName,
     onIncomingMessage: (msg) => {
       if (!user) return;
@@ -386,7 +389,6 @@ export default function ChatPage() {
     }
   }
 
-  const activeChannel = channels.find((c) => c.id === active);
   const regularChannels = channels.filter((c) => !c.isDirect);
   const dmChannels = channels.filter((c) => c.isDirect);
 

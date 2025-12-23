@@ -45,9 +45,7 @@ export function getSocket(): Socket {
     console.warn("[socket] connect_error:", err?.message);
   });
 
-  socket.on("disconnect", (reason) => {
-    console.log("[socket] disconnect:", reason);
-  });
+  socket.on("disconnect", (reason) => {});
 
   // Always update auth token before automatic reconnects
   socket.io.on("reconnect_attempt", () => {

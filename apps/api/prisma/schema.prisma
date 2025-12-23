@@ -27,33 +27,32 @@ model User {
 
   deletedMessages Message[] @relation("MessageDeletedBy")
 
-  reactions     MessageReaction[]
+  reactions MessageReaction[]
 
-  mentions      MessageMention[]
-
+  mentions MessageMention[]
 }
 
 model Channel {
-  id        String    @id @default(cuid())
-  name      String
-  isDirect  Boolean   @default(false)
-  createdAt DateTime  @default(now())
-  messages  Message[]
-  members   User[]    @relation("ChannelMembers")
-  dmKey     String?   @unique
-
-  reads ChannelRead[]
+  id            String                @id @default(cuid())
+  name          String
+  isDirect      Boolean               @default(false)
+  createdAt     DateTime              @default(now())
+  messages      Message[]
+  members       User[]                @relation("ChannelMembers")
+  dmKey         String?               @unique
+  reads         ChannelRead[]
+  digestSetting ChannelDigestSetting?
 }
 
 model MessageAttachment {
-  id        String   @id @default(cuid())
-  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  id        String  @id @default(cuid())
+  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
   messageId String
 
-  url       String
-  fileName  String
-  mimeType  String
-  size      Int
+  url      String
+  fileName String
+  mimeType String
+  size     Int
 
   createdAt DateTime @default(now())
 
@@ -76,11 +75,11 @@ model Message {
 
   reactions MessageReaction[]
 
-  parent    Message?   @relation("MessageReplies", fields: [parentId], references: [id])
-  parentId  String?
-  replies   Message[]  @relation("MessageReplies")
+  parent   Message?  @relation("MessageReplies", fields: [parentId], references: [id])
+  parentId String?
+  replies  Message[] @relation("MessageReplies")
 
-  mentions  MessageMention[]
+  mentions MessageMention[]
 
   attachments MessageAttachment[]
 
@@ -113,12 +112,26 @@ model MessageReaction {
 }
 
 model MessageMention {
-  id        String   @id @default(cuid())
-  message   Message  @relation(fields: [messageId], references: [id])
+  id        String  @id @default(cuid())
+  message   Message @relation(fields: [messageId], references: [id])
   messageId String
-  user      User     @relation(fields: [userId], references: [id])
+  user      User    @relation(fields: [userId], references: [id])
   userId    String
 
   @@index([messageId])
   @@index([userId])
+}
+
+model ChannelDigestSetting {
+  id        String @id @default(cuid())
+  channelId String @unique
+
+  enabled   Boolean   @default(false)
+  timeHHmm  String    @default("18:00")
+  lastRunAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 }

@@ -52,6 +52,7 @@ export class MessagesController {
       dto.replyToMessageId,
       dto.mentionUserIds ?? [],
       dto.attachments ?? [],
+      dto.lastReadOverride ?? null,
     );
   }
 

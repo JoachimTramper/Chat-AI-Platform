@@ -185,6 +185,15 @@ export class WsGateway
 
       const userId = payload.sub;
 
+      client.join(`user:${userId}`);
+
+      const memberChannels = await this.prisma.channel.findMany({
+        where: { members: { some: { id: userId } } },
+        select: { id: true },
+      });
+
+      client.join(memberChannels.map((c) => `chan:${c.id}`));
+
       // track socket
       this.socketToUser.set(client.id, { userId });
 
@@ -244,7 +253,7 @@ export class WsGateway
 
   // ---- channel join / leave ----
   @SubscribeMessage('channel.join')
-  handleJoin(
+  async handleJoin(
     @ConnectedSocket() client: Socket,
     @MessageBody() body: { channelId: string },
   ) {
@@ -254,34 +263,30 @@ export class WsGateway
     const channelId = body?.channelId;
     if (!channelId) return;
 
-    // ✅ ALWAYS join
-    client.join(channelId);
+    // join both rooms
+    client.join(`chan:${channelId}`);
+    client.join(`view:${channelId}`);
 
-    // welcome only in general
+    // if GENERAL is public: treat join as membership so unread works
+    if (channelId === GENERAL_CHANNEL_ID) {
+      await this.prisma.channel
+        .update({
+          where: { id: channelId },
+          data: { members: { connect: { id: u.sub } } },
+        })
+        .catch(() => {}); // already a member → ignore
+    }
+
+    // welcome logic only in general
     if (channelId !== GENERAL_CHANNEL_ID) return { ok: true };
 
     const key = `${channelId}:${u.sub}`;
     if (this.welcomed.has(key)) return { ok: true };
-
     this.welcomed.add(key);
 
-    this.server.to(channelId).emit('message.created', {
-      id: `welcome-${Date.now()}-${u.sub}`,
-      channelId,
-      authorId: 'bot-ai',
-      content: '👋 Welcome! Type `!help` to see what I can do.',
-      createdAt: new Date().toISOString(),
-      author: {
-        id: 'bot-ai',
-        displayName: 'KennyTheKommunicator',
-        avatarUrl: null,
-      },
-      parent: null,
-      reactions: [],
-      mentions: [],
-      attachments: [],
+    this.server.to(`view:${channelId}`).emit('message.created', {
+      /* Welcome Payload */
     });
-
     return { ok: true };
   }
 
@@ -296,7 +301,8 @@ export class WsGateway
     const channelId = body?.channelId;
     if (!channelId) return;
 
-    client.leave(channelId);
+    client.leave(`view:${channelId}`);
+    client.leave(`chan:${channelId}`);
     return { ok: true };
   }
 
@@ -310,17 +316,20 @@ export class WsGateway
     const u = (client as any).user as JwtPayload | undefined;
     if (!u) return;
 
+    const channelId = body?.channelId;
+    if (!channelId) return;
+
     const user = await this.getUserSafe(u.sub);
     if (!user) return;
 
     // typing counts as activity → user is not idle
     this.presence.touch(u.sub);
 
-    // direct presence broadcast, so status immediately jumps from "idle" → "online"
+    // immediately flip idle → online
     await this.broadcastPresenceUpdate(u.sub);
 
-    this.server.to(body.channelId).emit('typing', {
-      channelId: body.channelId,
+    this.server.to(`view:${channelId}`).emit('typing', {
+      channelId,
       userId: user.id,
       displayName: user.displayName,
       isTyping: !!body.isTyping,

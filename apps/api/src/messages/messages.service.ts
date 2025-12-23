@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { WsGateway } from '../ws/ws.gateway';
 import { AiBotService } from '../bot/ai-bot.service';
 import { AI_BOT_USER_ID } from '../bot/ai-bot.constants';
+import { formatHistoryLine } from '../bot/ai-bot.format';
 import { GENERAL_CHANNEL_ID } from '../channels.constants';
 
 @Injectable()
@@ -17,9 +18,6 @@ export class MessagesService {
     private ws: WsGateway,
     private aiBot: AiBotService,
   ) {}
-
-  private botCooldown = new Map<string, number>(); // key -> lastTimestampMs
-  private BOT_COOLDOWN_MS = 5000;
 
   async list(channelId: string, take = 50, cursor?: string) {
     const safeTake = Math.min(Math.max(take, 1), 100);
@@ -163,6 +161,7 @@ export class MessagesService {
       mimeType: string;
       size: number;
     }[] = [],
+    lastReadOverride?: string | null,
   ) {
     // 1) channel exists?
     const exists = await this.prisma.channel.findUnique({
@@ -253,8 +252,11 @@ export class MessagesService {
       },
     });
 
+    const room = `chan:${channelId}`;
+    const sockets = await this.ws.server.in(room).fetchSockets();
+
     // 4) realtime push (full payload incl. parent + reactions + mentions + attachments)
-    this.ws.server.to(channelId).emit('message.created', {
+    this.ws.server.to(`chan:${channelId}`).emit('message.created', {
       id: msg.id,
       channelId: msg.channelId,
       authorId: msg.authorId,
@@ -301,87 +303,242 @@ export class MessagesService {
       })),
     });
 
+    // 4b) unread push (to user-rooms, for everyone except the sender)
+    const ch = await this.prisma.channel.findUnique({
+      where: { id: msg.channelId },
+      select: { members: { select: { id: true } } },
+    });
+
+    for (const m of ch?.members ?? []) {
+      if (m.id === msg.authorId) continue;
+
+      const uroom = `user:${m.id}`;
+      const usockets = await this.ws.server.in(uroom).fetchSockets();
+
+      this.ws.server.to(uroom).emit('channel.unread', {
+        channelId: msg.channelId,
+        delta: 1,
+        messageId: msg.id,
+        at: msg.createdAt.toISOString(),
+      });
+    }
+
     const text = (msg.content ?? '').trim();
     const isCommand = text.startsWith('!');
+    const textHasBot = text.includes('@KennyTheKommunicator');
     const isGeneral = msg.channelId === GENERAL_CHANNEL_ID;
+    const botMentionedInSavedMsg = msg.mentions?.some(
+      (m) =>
+        m.user?.id === AI_BOT_USER_ID || (m as any).userId === AI_BOT_USER_ID,
+    );
 
     // 5) if bot mentioned, generate reply async
     if (
       isGeneral &&
-      (isBotMentioned || isCommand) &&
+      (isCommand || botMentionedInSavedMsg) &&
       msg.authorId !== AI_BOT_USER_ID
     ) {
-      const key = `${msg.channelId}:${msg.authorId}`;
-      const now = Date.now();
-      const last = this.botCooldown.get(key) ?? 0;
+      void (async () => {
+        // bot typing ON
+        this.ws.server.to(`view:${msg.channelId}`).emit('typing', {
+          channelId: msg.channelId,
+          userId: AI_BOT_USER_ID,
+          displayName: 'KennyTheKommunicator',
+          isTyping: true,
+        });
 
-      if (now - last >= this.BOT_COOLDOWN_MS) {
-        this.botCooldown.set(key, now);
+        try {
+          // ---- determine intent from user text ----
+          const cleanedUser = (msg.content ?? '')
+            .replaceAll(`@KennyTheKommunicator`, '')
+            .trim()
+            .toLowerCase();
 
-        // best-effort cleanup
-        if (this.botCooldown.size > 5000) {
-          const cutoff = now - 60_000; // 1 min
-          for (const [k, ts] of this.botCooldown) {
-            if (ts < cutoff) this.botCooldown.delete(k);
+          const wantsSummary =
+            cleanedUser.includes('samenvat') ||
+            cleanedUser.includes('samenvatting') ||
+            cleanedUser.includes('samenvatten') ||
+            cleanedUser.includes('summarize') ||
+            cleanedUser.includes('summary') ||
+            cleanedUser.includes('tldr');
+
+          const wantsSinceLastRead =
+            cleanedUser.includes('wat heb ik gemist') ||
+            cleanedUser.includes('wat mis ik') ||
+            cleanedUser.includes('since last read') ||
+            cleanedUser.includes('what did i miss') ||
+            cleanedUser.includes('missed') ||
+            cleanedUser.includes('did i miss') ||
+            cleanedUser.includes('miss something');
+
+          // ---- resolve lastRead ----
+          const read = await this.prisma.channelRead.findUnique({
+            where: {
+              userId_channelId: {
+                userId: msg.authorId,
+                channelId: msg.channelId,
+              },
+            },
+            select: { lastRead: true },
+          });
+
+          const overrideDate =
+            typeof lastReadOverride === 'string' && lastReadOverride
+              ? new Date(lastReadOverride)
+              : null;
+
+          const lastRead = overrideDate ?? read?.lastRead ?? null;
+          const cutoff = msg.createdAt;
+
+          // ---- build NOT clause ----
+          const notClause: any[] = [{ id: msg.id }];
+          if (wantsSinceLastRead) {
+            notClause.push({ authorId: msg.authorId }); // exclude requester
+            notClause.push({ authorId: AI_BOT_USER_ID }); // exclude bot's own messages
           }
-        }
 
-        void (async () => {
-          // bot typing ON
-          this.ws.server.to(msg.channelId).emit('typing', {
+          // ---- fetch context ----
+          const whereBase: any = {
+            channelId: msg.channelId,
+            deletedAt: null,
+            NOT: notClause,
+          };
+
+          const where = wantsSummary
+            ? {
+                ...whereBase,
+                // summary = "recent chat", so just cap at cutoff (no lastRead filter)
+                createdAt: { lte: cutoff },
+              }
+            : lastRead
+              ? {
+                  ...whereBase,
+                  // since-last-read = only unread window
+                  createdAt: { gt: lastRead, lte: cutoff },
+                }
+              : {
+                  ...whereBase,
+                  // no lastRead known -> fallback to recent chat too
+                  createdAt: { lte: cutoff },
+                };
+
+          // For summary we need the *latest* 50 (desc), then reverse for chronological prompt
+          const raw = await this.prisma.message.findMany({
+            where,
+            orderBy: { createdAt: wantsSummary ? 'desc' : 'asc' },
+            take: 50,
+            select: {
+              createdAt: true,
+              content: true,
+              author: { select: { displayName: true } },
+              parent: {
+                select: {
+                  author: { select: { displayName: true } },
+                },
+              },
+              mentions: {
+                select: {
+                  user: { select: { displayName: true } },
+                },
+              },
+            },
+          });
+
+          const context = wantsSummary ? raw.reverse() : raw;
+
+          // ---- build history ----
+          const history = context
+            .map((m) => formatHistoryLine(m as any))
+            .join('\n');
+
+          // ---- call AI bot ----
+          const botReply = await this.aiBot.onUserMessage({
+            channelId: msg.channelId,
+            authorId: msg.authorId,
+            content: msg.content ?? '',
+            isBotMentioned: isCommand ? false : botMentionedInSavedMsg,
+            history,
+            lastRead,
+            lastReadOverride: overrideDate,
+          });
+
+          if (!botReply?.reply?.trim()) {
+            return;
+          }
+
+          // ---- mark as read ONLY for "what did I miss" ----
+          if (wantsSinceLastRead) {
+            await this.prisma.channelRead.upsert({
+              where: {
+                userId_channelId: {
+                  userId: msg.authorId,
+                  channelId: msg.channelId,
+                },
+              },
+              update: { lastRead: cutoff },
+              create: {
+                userId: msg.authorId,
+                channelId: msg.channelId,
+                lastRead: cutoff,
+              },
+            });
+          }
+
+          // send bot reply as a real chat message
+          await this.createBotMessage(msg.channelId, botReply.reply, undefined);
+        } catch (err) {
+          console.warn('[bot] failed to generate reply', err);
+        } finally {
+          // bot typing OFF
+          this.ws.server.to(`view:${msg.channelId}`).emit('typing', {
             channelId: msg.channelId,
             userId: AI_BOT_USER_ID,
             displayName: 'KennyTheKommunicator',
-            isTyping: true,
+            isTyping: false,
           });
-
-          try {
-            const context = await this.prisma.message.findMany({
-              where: { channelId: msg.channelId, deletedAt: null },
-              orderBy: { createdAt: 'desc' },
-              take: 15,
-              select: {
-                content: true,
-                author: { select: { displayName: true } },
-              },
-            });
-
-            const history = context
-              .reverse()
-              .map((m) => `${m.author.displayName}: ${m.content ?? ''}`)
-              .join('\n');
-
-            const botReply = await this.aiBot.onUserMessage({
-              channelId: msg.channelId,
-              authorId: msg.authorId,
-              content: msg.content ?? '',
-              isBotMentioned,
-              history,
-            });
-
-            if (!botReply) return;
-
-            await this.createBotMessage(
-              msg.channelId,
-              botReply.reply,
-              msg.authorId,
-            );
-          } catch (err) {
-            console.warn('[bot] failed to generate reply', err);
-          } finally {
-            // bot typing OFF
-            this.ws.server.to(msg.channelId).emit('typing', {
-              channelId: msg.channelId,
-              userId: AI_BOT_USER_ID,
-              displayName: 'KennyTheKommunicator',
-              isTyping: false,
-            });
-          }
-        })();
-      }
+        }
+      })();
     }
 
     return msg;
+  }
+
+  // on-demand digest posting
+  async postDigestToChannel(
+    channelId: string,
+    opts?: { hours?: number },
+  ): Promise<{ ok: true; messageId: string }> {
+    const hours = opts?.hours ?? 24;
+
+    // Generate digest text using the bot (single source of truth)
+    const digestText = await this.aiBot.generateDigestForChannel(
+      channelId,
+      hours,
+    );
+
+    // Post as bot message
+    const msg = await this.createBotMessage(channelId, digestText);
+
+    return { ok: true, messageId: msg.id };
+  }
+
+  // check if there are messages (non-bot) in last N hours
+  async hasMessagesInLastHours(
+    channelId: string,
+    hours: number,
+  ): Promise<boolean> {
+    const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+
+    const count = await this.prisma.message.count({
+      where: {
+        channelId,
+        deletedAt: null,
+        authorId: { not: AI_BOT_USER_ID },
+        createdAt: { gte: since },
+      },
+    });
+
+    return count > 0;
   }
 
   // helper to create bot message
@@ -419,7 +576,7 @@ export class MessagesService {
       });
     }
 
-    this.ws.server.to(channelId).emit('message.created', {
+    this.ws.server.to(`chan:${channelId}`).emit('message.created', {
       id: msg.id,
       channelId: msg.channelId,
       authorId: msg.authorId,
@@ -475,7 +632,7 @@ export class MessagesService {
     });
 
     // realtime: minimal payload is enough
-    this.ws.server.to(channelId).emit('message.updated', {
+    this.ws.server.to(`chan:${channelId}`).emit('message.updated', {
       id: updated.id,
       channelId,
       content: updated.content ?? null,
@@ -499,7 +656,7 @@ export class MessagesService {
       select: { id: true, channelId: true, deletedAt: true },
     });
 
-    this.ws.server.to(channelId).emit('message.deleted', {
+    this.ws.server.to(`chan:${channelId}`).emit('message.deleted', {
       id: deleted.id,
       channelId,
       deletedAt: deleted.deletedAt!.toISOString(),
@@ -540,7 +697,7 @@ export class MessagesService {
     });
 
     // minimal realtime payload – frontend counts further itself
-    this.ws.server.to(msg.channelId).emit('message.added', {
+    this.ws.server.to(`chan:${msg.channelId}`).emit('message.added', {
       messageId,
       channelId: msg.channelId,
       emoji: trimmed,
@@ -578,7 +735,7 @@ export class MessagesService {
       // ignore if not found
     }
 
-    this.ws.server.to(msg.channelId).emit('message.removed', {
+    this.ws.server.to(`chan:${msg.channelId}`).emit('message.removed', {
       messageId,
       channelId: msg.channelId,
       emoji: trimmed,

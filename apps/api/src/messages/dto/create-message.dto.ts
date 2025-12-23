@@ -45,4 +45,8 @@ export class CreateMessageDto {
   @ValidateNested({ each: true })
   @Type(() => AttachmentDto)
   attachments?: AttachmentDto[];
+
+  @IsOptional()
+  @IsString()
+  lastReadOverride?: string;
 }

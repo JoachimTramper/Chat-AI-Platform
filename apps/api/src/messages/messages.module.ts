@@ -1,14 +1,15 @@
 // apps/api/src/messages/messages.module.ts
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { MessagesController } from './messages.controller';
 import { MessagesService } from './messages.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { WsModule } from '../ws/ws.module';
-import { BotModule } from 'src/bot/ai-bot.module';
+import { BotModule } from '../bot/ai-bot.module';
 
 @Module({
-  imports: [PrismaModule, WsModule, BotModule],
+  imports: [PrismaModule, WsModule, forwardRef(() => BotModule)],
   controllers: [MessagesController],
   providers: [MessagesService],
+  exports: [MessagesService],
 })
 export class MessagesModule {}

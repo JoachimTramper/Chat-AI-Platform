@@ -6,6 +6,8 @@ import { ChannelsModule } from './channels/channels.module';
 import { MessagesModule } from './messages/messages.module';
 import { WsModule } from './ws/ws.module';
 import { UploadsModule } from './uploads/uploads.module';
+import { DigestModule } from './digest/digest.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -16,6 +18,8 @@ import { UploadsModule } from './uploads/uploads.module';
     MessagesModule,
     WsModule,
     UploadsModule,
+    DigestModule,
+    ScheduleModule.forRoot(),
   ],
 })
 export class AppModule {}

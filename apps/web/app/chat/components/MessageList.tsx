@@ -9,6 +9,7 @@ import {
 } from "react";
 import type { Message } from "../types";
 import { MessageItem } from "./MessageItem";
+import { dayKey, formatDayLabel } from "../utils/utils";
 
 type Props = {
   msgs: Message[];
@@ -152,42 +153,57 @@ export function MessageList({
           </div>
         ) : (
           safeMsgs.map((m, index) => {
+            const prev = safeMsgs[index - 1];
+            const showDayDivider =
+              !prev || dayKey(prev.createdAt) !== dayKey(m.createdAt);
+
             const showSeen = isDirect && index === lastMySeenIndex;
             const isLastOwn =
               isDirect && m.authorId === meId && index === lastMyIndex;
             const isHighlighted = highlightedId === m.id;
 
             return (
-              <div
-                key={m.id}
-                ref={(el) => {
-                  messageRefs.current[m.id] = el;
-                }}
-                className={
-                  isHighlighted
-                    ? "ring-2 ring-blue-400 bg-blue-50 rounded-md"
-                    : ""
-                }
-              >
-                <MessageItem
-                  m={m}
-                  meId={meId}
-                  channelId={channelId}
-                  isMe={m.authorId === meId}
-                  isDirect={isDirect}
-                  isEditing={editingId === m.id}
-                  onStartEdit={() => onStartEdit(m)}
-                  onSaveEdit={() => onSaveEdit(m)}
-                  onCancelEdit={onCancelEdit}
-                  onDelete={() => onDelete(m)}
-                  onReply={() => onReply(m)}
-                  editText={editText}
-                  setEditText={setEditText}
-                  formatDateTime={formatDateTime}
-                  showSeen={showSeen}
-                  isLastOwn={isLastOwn}
-                  onRetry={() => onRetrySend?.(m.id)}
-                />
+              <div key={m.id}>
+                {showDayDivider && (
+                  <div className="my-4 flex items-center gap-3">
+                    <div className="h-px flex-1 bg-neutral-300/70" />
+                    <div className="text-[11px] px-2 py-1 rounded-full bg-white/70 border border-neutral-300 text-neutral-700">
+                      {formatDayLabel(m.createdAt)}
+                    </div>
+                    <div className="h-px flex-1 bg-neutral-300/70" />
+                  </div>
+                )}
+
+                <div
+                  ref={(el) => {
+                    messageRefs.current[m.id] = el;
+                  }}
+                  className={
+                    isHighlighted
+                      ? "ring-2 ring-blue-400 bg-blue-50 rounded-md"
+                      : ""
+                  }
+                >
+                  <MessageItem
+                    m={m}
+                    meId={meId}
+                    channelId={channelId}
+                    isMe={m.authorId === meId}
+                    isDirect={isDirect}
+                    isEditing={editingId === m.id}
+                    onStartEdit={() => onStartEdit(m)}
+                    onSaveEdit={() => onSaveEdit(m)}
+                    onCancelEdit={onCancelEdit}
+                    onDelete={() => onDelete(m)}
+                    onReply={() => onReply(m)}
+                    editText={editText}
+                    setEditText={setEditText}
+                    formatDateTime={formatDateTime}
+                    showSeen={showSeen}
+                    isLastOwn={isLastOwn}
+                    onRetry={() => onRetrySend?.(m.id)}
+                  />
+                </div>
               </div>
             );
           })

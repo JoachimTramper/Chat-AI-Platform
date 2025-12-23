@@ -41,13 +41,20 @@ export class ChannelsService {
     });
     if (!ch) throw new NotFoundException('Channel not found');
 
-    const now = new Date();
+    // pick the latest existing message timestamp in this channel
+    const latest = await this.prisma.message.findFirst({
+      where: { channelId, deletedAt: null },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true },
+    });
+
+    const at = latest?.createdAt ?? new Date();
 
     // Update ChannelRead
     await this.prisma.channelRead.upsert({
       where: { userId_channelId: { userId: meId, channelId } },
-      update: { lastRead: now },
-      create: { userId: meId, channelId, lastRead: now },
+      update: { lastRead: at },
+      create: { userId: meId, channelId, lastRead: at },
     });
 
     // Only for DM channels, emit a "message.read" event
@@ -66,12 +73,12 @@ export class ChannelsService {
           channelId,
           userId: meId,
           messageId: lastMsg.id,
-          at: now.toISOString(),
+          at: at.toISOString(),
         });
       }
     }
 
-    return { ok: true, channelId, lastRead: now.toISOString() };
+    return { ok: true, channelId, lastRead: at.toISOString() };
   }
 
   /**
@@ -99,12 +106,15 @@ export class ChannelsService {
 
     const result = await Promise.all(
       channels.map(async (c) => {
-        const lastRead = lastReadByChannel.get(c.id) ?? new Date(0);
+        const lastReadDate = lastReadByChannel.get(c.id) ?? null;
+
+        // unread: if never read -> count all (except mine)
         const unread = await this.prisma.message.count({
           where: {
             channelId: c.id,
-            createdAt: { gt: lastRead },
+            ...(lastReadDate ? { createdAt: { gt: lastReadDate } } : {}),
             NOT: { authorId: meId },
+            deletedAt: null,
           },
         });
 
@@ -115,7 +125,13 @@ export class ChannelsService {
           name = other?.displayName ?? 'Direct';
         }
 
-        return { id: c.id, name, isDirect: c.isDirect, unread };
+        return {
+          id: c.id,
+          name,
+          isDirect: c.isDirect,
+          unread,
+          lastRead: lastReadDate ? lastReadDate.toISOString() : null,
+        };
       }),
     );
 

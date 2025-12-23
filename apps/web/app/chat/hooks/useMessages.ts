@@ -15,6 +15,7 @@ type ResolveDisplayName = (id: string) => string | undefined;
 type UseMessagesOptions = {
   resolveDisplayName?: ResolveDisplayName;
   onIncomingMessage?: (msg: Message) => void;
+  lastReadSnapshot?: string | null;
 };
 
 export function useMessages(
@@ -30,6 +31,18 @@ export function useMessages(
   const [lastReadMessageIdByOthers, setLastReadMessageIdByOthers] = useState<
     string | null
   >(null);
+  const lastReadSnapshotRef = useRef<string | null>(null);
+  const nearBottomRef = useRef(false);
+
+  const isWhatDidIMiss = (text?: string) => {
+    const t = (text ?? "").toLowerCase();
+    return (
+      t.includes("what did i miss") ||
+      t.includes("since last read") ||
+      t.includes("wat heb ik gemist") ||
+      t.includes("wat mis ik")
+    );
+  };
 
   // keep latest resolver & userId in refs (avoid changing effect deps length)
   const resolveNameRef = useRef<ResolveDisplayName | undefined>(undefined);
@@ -48,13 +61,21 @@ export function useMessages(
     onIncomingRef.current = opts?.onIncomingMessage;
   }, [opts?.onIncomingMessage]);
 
+  const snapshotForChannelRef = useRef<string | null>(null);
+
   // initial load
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || !active) return;
 
     (async () => {
       try {
-        const raw = await listMessages(active!);
+        // snapshot only once per channel open
+        if (snapshotForChannelRef.current !== active) {
+          snapshotForChannelRef.current = active;
+          lastReadSnapshotRef.current = opts?.lastReadSnapshot ?? null;
+        }
+
+        const raw = await listMessages(active);
 
         const normalized = raw.reverse().map((m: any) => ({
           ...m,
@@ -80,16 +101,20 @@ export function useMessages(
 
         setMsgs(normalized);
 
-        // markChannelRead may fail without crashing the UI
-        try {
-          await markChannelRead(active!);
-        } catch (err) {
-          console.warn("markChannelRead failed (ignored):", err);
-        }
-
         requestAnimationFrame(() => {
           const el = listRef.current;
-          if (el) el.scrollTop = el.scrollHeight;
+          if (!el) return;
+
+          el.scrollTop = el.scrollHeight;
+
+          nearBottomRef.current =
+            el.scrollHeight - el.scrollTop - el.clientHeight < 64;
+
+          if (nearBottomRef.current) {
+            markChannelRead(active).catch((err) => {
+              console.warn("markChannelRead failed (ignored):", err);
+            });
+          }
         });
       } catch (err) {
         console.error("Failed to load messages:", err);
@@ -331,20 +356,69 @@ export function useMessages(
     };
   }, [ready, active]);
 
+  // track near-bottom state
+  useEffect(() => {
+    if (!ready || !active) return;
+
+    const el = listRef.current;
+    if (!el) return;
+
+    const updateNearBottom = () => {
+      const wasNearBottom = nearBottomRef.current;
+      const isNearBottom =
+        el.scrollHeight - el.scrollTop - el.clientHeight < 64;
+
+      nearBottomRef.current = isNearBottom;
+
+      // transition: false → true
+      if (!wasNearBottom && isNearBottom) {
+        markChannelRead(active).catch(() => {});
+      }
+    };
+
+    el.addEventListener("scroll", updateNearBottom);
+    updateNearBottom(); // initial check
+
+    return () => {
+      el.removeEventListener("scroll", updateNearBottom);
+    };
+  }, [ready, active]);
+
   // auto-scroll at bottom on new messages
   useEffect(() => {
     const el = listRef.current;
     if (!el || !ready || !active) return;
 
-    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 64;
+    if (!nearBottomRef.current) return;
 
-    if (nearBottom) {
-      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-      markChannelRead(active).catch((err) => {
-        console.error("Failed to mark channel read:", err);
-      });
-    }
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+
+    markChannelRead(active).catch((err) => {
+      console.error("Failed to mark channel read:", err);
+    });
   }, [msgs, ready, active]);
+
+  // mark as read on window focus or tab visibility
+  useEffect(() => {
+    if (!ready || !active) return;
+
+    const markIfAtBottom = () => {
+      if (!nearBottomRef.current) return;
+      markChannelRead(active).catch(() => {});
+    };
+
+    const onVis = () => {
+      if (document.visibilityState === "visible") markIfAtBottom();
+    };
+
+    window.addEventListener("focus", markIfAtBottom);
+    document.addEventListener("visibilitychange", onVis);
+
+    return () => {
+      window.removeEventListener("focus", markIfAtBottom);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [ready, active]);
 
   // SEND + failed fallback
   const send = async (
@@ -360,14 +434,21 @@ export function useMessages(
   ) => {
     if (!active || !userIdRef.current) return;
 
+    const advanceSnapshot = isWhatDidIMiss(text);
+
     try {
-      await sendMessage(
+      const sent = await sendMessage(
         active,
         text,
         replyToMessageId,
         mentionUserIds,
-        attachments
+        attachments,
+        lastReadSnapshotRef.current
       );
+
+      if (advanceSnapshot) {
+        lastReadSnapshotRef.current = sent.createdAt;
+      }
     } catch (err) {
       console.error("Failed to send message:", err);
 

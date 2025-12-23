@@ -157,8 +157,6 @@ export async function searchMessages(
     `/channels/${channelId}/messages/search${qs ? `?${qs}` : ""}`
   );
 
-  console.log("[api.searchMessages] raw data:", data);
-
   return data as Message[];
 }
 
@@ -167,15 +165,17 @@ export async function sendMessage(
   content?: string,
   replyToMessageId?: string,
   mentionUserIds: string[] = [],
-  attachments: Array<any> = []
+  attachments: Array<any> = [],
+  lastReadOverride?: string | null
 ) {
   const { data } = await api.post(`/channels/${channelId}/messages`, {
     content,
     replyToMessageId,
     mentionUserIds,
     attachments,
+    lastReadOverride,
   });
-  return data;
+  return data as Message;
 }
 
 // Explicitly pass Authorization for PATCH/DELETE to avoid any interceptor/import drift.
@@ -287,5 +287,6 @@ export async function listChannelsWithUnread() {
     name: string;
     isDirect: boolean;
     unread: number;
+    lastRead: string | null;
   }>;
 }

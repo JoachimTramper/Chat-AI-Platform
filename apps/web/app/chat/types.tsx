@@ -78,4 +78,7 @@ export type OnlineUser = {
   status?: "online" | "idle";
 };
 
-export type ChannelWithUnread = Channel & { unread?: number };
+export type ChannelWithUnread = Channel & {
+  unread?: number;
+  lastRead?: string | null;
+};
