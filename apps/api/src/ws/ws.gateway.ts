@@ -93,6 +93,27 @@ export class WsGateway
     });
   }
 
+  private async canAccessChannel(channelId: string, userId: string) {
+    if (channelId === GENERAL_CHANNEL_ID) return true;
+
+    const ch = await this.prisma.channel.findUnique({
+      where: { id: channelId },
+      select: {
+        id: true,
+        isDirect: true,
+        members: { where: { id: userId }, select: { id: true } },
+      },
+    });
+
+    if (!ch) return false;
+
+    // If it’s a DM (or any private channel), require membership
+    if (ch.isDirect) return ch.members.length > 0;
+
+    // If you have other non-DM private channels later, adjust here.
+    return true;
+  }
+
   private async sendPresenceSnapshot(to: Socket) {
     // current online users + their status from PresenceService
     const onlineWithStatus = this.presence.getOnlineWithStatus();
@@ -263,18 +284,20 @@ export class WsGateway
     const channelId = body?.channelId;
     if (!channelId) return;
 
-    // join both rooms
+    const ok = await this.canAccessChannel(channelId, u.sub);
+    if (!ok) return { ok: false, error: 'FORBIDDEN' };
+
     client.join(`chan:${channelId}`);
     client.join(`view:${channelId}`);
 
-    // if GENERAL is public: treat join as membership so unread works
+    // keep your GENERAL membership connect if you want unread to work
     if (channelId === GENERAL_CHANNEL_ID) {
       await this.prisma.channel
         .update({
           where: { id: channelId },
           data: { members: { connect: { id: u.sub } } },
         })
-        .catch(() => {}); // already a member → ignore
+        .catch(() => {});
     }
 
     // welcome logic only in general
@@ -319,16 +342,17 @@ export class WsGateway
     const channelId = body?.channelId;
     if (!channelId) return;
 
+    const ok = await this.canAccessChannel(channelId, u.sub);
+    if (!ok) return;
+
     const user = await this.getUserSafe(u.sub);
     if (!user) return;
 
-    // typing counts as activity → user is not idle
     this.presence.touch(u.sub);
-
-    // immediately flip idle → online
     await this.broadcastPresenceUpdate(u.sub);
 
-    this.server.to(`view:${channelId}`).emit('typing', {
+    // Prefer client.to() so the sender doesn't receive their own typing event
+    client.to(`view:${channelId}`).emit('typing', {
       channelId,
       userId: user.id,
       displayName: user.displayName,

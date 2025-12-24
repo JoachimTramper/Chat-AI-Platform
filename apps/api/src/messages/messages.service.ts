@@ -11,6 +11,8 @@ import { AI_BOT_USER_ID } from '../bot/ai-bot.constants';
 import { formatHistoryLine } from '../bot/ai-bot.format';
 import { GENERAL_CHANNEL_ID } from '../channels.constants';
 
+const MAX_MESSAGE_LEN = 5000;
+
 @Injectable()
 export class MessagesService {
   constructor(
@@ -19,7 +21,9 @@ export class MessagesService {
     private aiBot: AiBotService,
   ) {}
 
-  async list(channelId: string, take = 50, cursor?: string) {
+  async list(channelId: string, userId: string, take = 50, cursor?: string) {
+    await this.assertCanAccessChannel(channelId, userId);
+
     const safeTake = Math.min(Math.max(take, 1), 100);
 
     return this.prisma.message.findMany({
@@ -82,7 +86,15 @@ export class MessagesService {
     });
   }
 
-  async search(channelId: string, query: string, take = 50, cursor?: string) {
+  async search(
+    channelId: string,
+    userId: string,
+    query: string,
+    take = 50,
+    cursor?: string,
+  ) {
+    await this.assertCanAccessChannel(channelId, userId);
+
     const safeTake = Math.min(Math.max(take, 1), 100);
 
     return this.prisma.message.findMany({
@@ -163,11 +175,16 @@ export class MessagesService {
     }[] = [],
     lastReadOverride?: string | null,
   ) {
-    // 1) channel exists?
-    const exists = await this.prisma.channel.findUnique({
-      where: { id: channelId },
-    });
-    if (!exists) throw new NotFoundException('Channel not found');
+    // 1) access control (BESTAAT + MEMBERSHIP)
+    await this.assertCanAccessChannel(channelId, authorId);
+
+    // 1b) content length guard
+    const cleanContent = (content ?? '').trim();
+    if (cleanContent.length > MAX_MESSAGE_LEN) {
+      throw new ForbiddenException(
+        `Message too long (max ${MAX_MESSAGE_LEN} chars)`,
+      );
+    }
 
     // 2) parent check (optional, for replies)
     let parentId: string | undefined = undefined;
@@ -195,7 +212,7 @@ export class MessagesService {
       data: {
         channelId,
         authorId,
-        content: content ?? '',
+        content: cleanContent,
         parentId,
         mentions: {
           create: cleanMentions.map((userId) => ({ userId })),
@@ -325,7 +342,6 @@ export class MessagesService {
 
     const text = (msg.content ?? '').trim();
     const isCommand = text.startsWith('!');
-    const textHasBot = text.includes('@KennyTheKommunicator');
     const isGeneral = msg.channelId === GENERAL_CHANNEL_ID;
     const botMentionedInSavedMsg = msg.mentions?.some(
       (m) =>
@@ -596,6 +612,27 @@ export class MessagesService {
     return msg;
   }
 
+  // helper to assert channel access
+
+  private async assertCanAccessChannel(channelId: string, userId: string) {
+    if (channelId === GENERAL_CHANNEL_ID) return;
+
+    const ch = await this.prisma.channel.findUnique({
+      where: { id: channelId },
+      select: {
+        id: true,
+        isDirect: true,
+        members: { where: { id: userId }, select: { id: true } },
+      },
+    });
+
+    if (!ch) throw new NotFoundException('Channel not found');
+
+    if (ch.isDirect && ch.members.length === 0) {
+      throw new ForbiddenException('Not a channel member');
+    }
+  }
+
   /** helper for permissions update/delete */
   private async canMutate(messageId: string, userId: string) {
     const [msg, me] = await Promise.all([
@@ -612,6 +649,9 @@ export class MessagesService {
     if (!msg) throw new NotFoundException('Message not found');
     if (msg.deletedAt) throw new ForbiddenException('Message already deleted');
 
+    // channel access check (DM/private)
+    await this.assertCanAccessChannel(msg.channelId, userId);
+
     const isOwner = msg.authorId === userId;
     const isAdmin = me?.role === 'ADMIN';
     return { isOwner, isAdmin, channelId: msg.channelId };
@@ -625,9 +665,15 @@ export class MessagesService {
     );
     if (!isOwner && !isAdmin) throw new ForbiddenException('Not allowed');
 
+    const cleanContent = (content ?? '').trim();
+    if (cleanContent.length > MAX_MESSAGE_LEN) {
+      throw new ForbiddenException(
+        `Message too long (max ${MAX_MESSAGE_LEN} chars)`,
+      );
+    }
     const updated = await this.prisma.message.update({
       where: { id: messageId },
-      data: { content },
+      data: { content: cleanContent },
       select: { id: true, channelId: true, content: true, updatedAt: true },
     });
 
@@ -679,6 +725,8 @@ export class MessagesService {
     });
     if (!msg) throw new NotFoundException('Message not found');
 
+    await this.assertCanAccessChannel(msg.channelId, userId);
+
     // Ensure the same user cannot add the same emoji reaction to the same message twice
     await this.prisma.messageReaction.upsert({
       where: {
@@ -719,6 +767,8 @@ export class MessagesService {
       select: { id: true, channelId: true },
     });
     if (!msg) throw new NotFoundException('Message not found');
+
+    await this.assertCanAccessChannel(msg.channelId, userId);
 
     // best-effort delete: if not found, ignore
     try {

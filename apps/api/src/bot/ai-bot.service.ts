@@ -245,7 +245,7 @@ export class AiBotService {
     if (!payload.isBotMentioned) return null;
 
     if (!this.apiKey) {
-      return { reply: 'Groq API key missing (GROQ_API_KEY).' };
+      return { reply: 'Groq API key missing.' };
     }
 
     const intent = parseBotIntent(text, AI_BOT_NAME);
@@ -415,21 +415,6 @@ export class AiBotService {
 
     const lang = this.pickLang(meta?.userText);
 
-    const key = this.throttleKey({
-      mode: meta?.mode,
-      channelId: meta?.channelId,
-      authorId: meta?.authorId,
-    });
-
-    const windowMs = meta?.mode === 'digest' ? 30_000 : 5_000;
-
-    if (this.shouldThrottle(key, windowMs)) {
-      this.logger.warn(
-        `groq.throttled mode=${meta?.mode ?? 'unknown'} channel=${meta?.channelId ?? '-'} windowMs=${windowMs}`,
-      );
-      return this.msg(lang, 'rateLimited');
-    }
-
     this.logger.log(
       `groq.request mode=${meta?.mode ?? 'unknown'} channel=${meta?.channelId ?? '-'} msgs=${messages.length}`,
     );
@@ -528,7 +513,7 @@ export class AiBotService {
     hours = 24,
   ): Promise<string> {
     if (!this.apiKey) {
-      return 'Groq API key missing (GROQ_API_KEY).';
+      return 'Groq API key missing.';
     }
 
     const history = await this.buildHistoryLast24h(channelId, hours);

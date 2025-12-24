@@ -1,4 +1,6 @@
+// apps/api/src/auth/auth.controller.ts
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -19,8 +21,16 @@ import { UsersService } from '../users/users.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
+import { Throttle, SkipThrottle } from '@nestjs/throttler';
 
 const AVATAR_DEST = './uploads/avatars';
+
+const AVATAR_ALLOWED = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+]);
 
 @Controller('auth')
 export class AuthController {
@@ -30,21 +40,25 @@ export class AuthController {
     private usersService: UsersService,
   ) {}
 
+  @Throttle({ default: { limit: 3, ttl: 60 } })
   @Post('register')
   register(@Body() dto: RegisterDto) {
     return this.auth.register(dto.email, dto.password, dto.displayName);
   }
 
+  @Throttle({ default: { limit: 5, ttl: 60 } })
   @Post('login')
   login(@Body() dto: LoginDto) {
     return this.auth.login(dto.email, dto.password);
   }
 
+  @Throttle({ default: { limit: 10, ttl: 60 } })
   @Post('refresh')
   refresh(@Body('refreshToken') token: string) {
     return this.auth.refresh(token);
   }
 
+  @SkipThrottle()
   @UseGuards(AuthGuard('jwt'))
   @Get('me')
   async me(@User() user: any) {
@@ -79,10 +93,17 @@ export class AuthController {
     };
   }
 
+  @Throttle({ default: { limit: 10, ttl: 60 } })
   @UseGuards(AuthGuard('jwt'))
   @Post('me/avatar/upload')
   @UseInterceptors(
     FileInterceptor('file', {
+      fileFilter: (req, file, cb) => {
+        if (!AVATAR_ALLOWED.has(file.mimetype)) {
+          return cb(new BadRequestException('Avatar type not allowed'), false);
+        }
+        cb(null, true);
+      },
       storage: diskStorage({
         destination: AVATAR_DEST,
         filename: (req: any, file, cb) => {
@@ -100,7 +121,6 @@ export class AuthController {
     @User() user: any,
     @UploadedFile() file: Express.Multer.File,
   ) {
-    // frontend gets avatar here
     const avatarUrl = `/uploads/avatars/${file.filename}`;
 
     const updated = await this.usersService.updateAvatar(user.sub, avatarUrl);

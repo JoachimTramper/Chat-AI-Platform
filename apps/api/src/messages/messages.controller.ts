@@ -17,7 +17,9 @@ import { User } from '../auth/decorators/user.decorator';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { UpdateMessageDto } from './dto/update-message.dto';
 import { SearchMessagesDto } from './dto/search-messages.dto';
+import { Throttle } from '@nestjs/throttler';
 
+@Throttle({ default: { limit: 120, ttl: 60 } })
 @Controller('channels/:id/messages')
 @UseGuards(JwtAuthGuard)
 export class MessagesController {
@@ -26,17 +28,32 @@ export class MessagesController {
   @Get()
   list(
     @Param('id') channelId: string,
+    @User() user: { sub: string },
     @Query('take') take?: string,
     @Query('cursor') cursor?: string,
   ) {
-    const n = take ? Number(take) : 50;
-    return this.svc.list(channelId, Number.isFinite(n) ? n : 50, cursor);
+    const n = Number(take);
+    const safeTake = Number.isFinite(n) ? n : 50;
+
+    return this.svc.list(channelId, user.sub, safeTake, cursor);
   }
 
   @Get('search')
-  search(@Param('id') channelId: string, @Query() dto: SearchMessagesDto) {
-    const take = dto.take ?? 50;
-    return this.svc.search(channelId, dto.query, take, dto.cursor);
+  search(
+    @Param('id') channelId: string,
+    @User() user: { sub: string },
+    @Query() dto: SearchMessagesDto,
+  ) {
+    const n = Number(dto.take);
+    const safeTake = Number.isFinite(n) ? n : 50;
+
+    return this.svc.search(
+      channelId,
+      user.sub,
+      dto.query,
+      safeTake,
+      dto.cursor,
+    );
   }
 
   @Post()
