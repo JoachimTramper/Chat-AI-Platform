@@ -18,6 +18,7 @@ type Props = {
   openDM: (id: string) => Promise<void> | void;
   formatLastOnline: (d?: string | null) => string;
   meId: string;
+  isAdmin: boolean;
 };
 
 type PresenceStatus = "online" | "idle" | "offline";
@@ -36,6 +37,7 @@ export function Sidebar({
   openDM,
   formatLastOnline,
   meId,
+  isAdmin,
 }: Props) {
   // --- Presence helpers ---
   function getUserStatus(userId: string): PresenceStatus {
@@ -72,39 +74,43 @@ export function Sidebar({
           <h2 className="font-semibold text-xs uppercase tracking-wide text-neutral-500">
             Channels
           </h2>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              onCreateChannel();
-            }}
-            className="mt-2 flex gap-2"
-          >
-            <input
-              className="flex-1 px-2 py-1 text-sm rounded-lg border border-neutral-300 bg-white
-                         text-neutral-900 placeholder:text-neutral-500
-                         disabled:bg-neutral-100 disabled:text-neutral-400
-                         focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 outline-none"
-              placeholder="New channel…"
-              value={newChannel}
-              onChange={(e) => setNewChannel(e.target.value)}
-              disabled={creating}
-            />
-            <button
-              className="
-                px-3 py-1.5 text-sm rounded-lg
-                bg-indigo-600 text-white font-medium
-                shadow-lg hover:shadow-xl
-                border border-transparent
-                transition-colors transition-shadow
-                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2
-                disabled:opacity-70 disabled:cursor-not-allowed
-              "
-              disabled={creating || !newChannel.trim()}
-              type="submit"
+          {isAdmin && (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                onCreateChannel();
+              }}
+              className="mt-2 flex gap-2"
             >
-              Add
-            </button>
-          </form>
+              <input
+                className="
+                  flex-1 px-2 py-1 text-sm rounded-lg border border-neutral-300 bg-white
+                  text-neutral-900 placeholder:text-neutral-500
+                  disabled:bg-neutral-100 disabled:text-neutral-400
+                  focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 outline-none
+                "
+                placeholder="New channel…"
+                value={newChannel}
+                onChange={(e) => setNewChannel(e.target.value)}
+                disabled={creating}
+              />
+              <button
+                className="
+                  px-3 py-1.5 text-sm rounded-lg
+                  bg-indigo-600 text-white font-medium
+                  shadow-lg hover:shadow-xl
+                  border border-transparent
+                  transition-colors transition-shadow
+                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2
+                  disabled:opacity-70 disabled:cursor-not-allowed
+                "
+                disabled={creating || !newChannel.trim()}
+                type="submit"
+              >
+                Add
+              </button>
+            </form>
+          )}
 
           <div className="mt-2 space-y-1">
             {regularChannels.map((c) => (

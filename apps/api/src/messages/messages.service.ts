@@ -359,14 +359,14 @@ export class MessagesService {
         this.ws.server.to(`view:${msg.channelId}`).emit('typing', {
           channelId: msg.channelId,
           userId: AI_BOT_USER_ID,
-          displayName: 'KennyTheKommunicator',
+          displayName: 'BambooBob',
           isTyping: true,
         });
 
         try {
           // ---- determine intent from user text ----
           const cleanedUser = (msg.content ?? '')
-            .replaceAll(`@KennyTheKommunicator`, '')
+            .replaceAll(`@BambooBob`, '')
             .trim()
             .toLowerCase();
 
@@ -509,7 +509,7 @@ export class MessagesService {
           this.ws.server.to(`view:${msg.channelId}`).emit('typing', {
             channelId: msg.channelId,
             userId: AI_BOT_USER_ID,
-            displayName: 'KennyTheKommunicator',
+            displayName: 'BambooBob',
             isTyping: false,
           });
         }

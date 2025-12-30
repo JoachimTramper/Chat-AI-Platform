@@ -13,23 +13,22 @@ enum Role {
 }
 
 model User {
-  id           String        @id @default(cuid())
-  email        String        @unique
-  passwordHash String
-  displayName  String
-  role         Role          @default(USER)
-  createdAt    DateTime      @default(now())
-  messages     Message[]
-  lastSeen     DateTime?
-  channels     Channel[]     @relation("ChannelMembers")
-  reads        ChannelRead[]
-  avatarUrl    String?
-
-  deletedMessages Message[] @relation("MessageDeletedBy")
-
-  reactions MessageReaction[]
-
-  mentions MessageMention[]
+  id              String        @id @default(cuid())
+  email           String        @unique
+  passwordHash    String
+  displayName     String
+  role            Role          @default(USER)
+  createdAt       DateTime      @default(now())
+  emailVerifiedAt DateTime?
+  emailVerificationToken EmailVerificationToken?
+  messages        Message[]
+  lastSeen        DateTime?
+  channels        Channel[]     @relation("ChannelMembers")
+  reads           ChannelRead[]
+  avatarUrl       String?
+  deletedMessages Message[]     @relation("MessageDeletedBy")
+  reactions       MessageReaction[]
+  mentions        MessageMention[]
 }
 
 model Channel {
@@ -134,4 +133,16 @@ model ChannelDigestSetting {
   updatedAt DateTime @updatedAt
 
   channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  tokenHash String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
 }

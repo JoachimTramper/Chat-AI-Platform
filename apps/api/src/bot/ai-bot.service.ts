@@ -111,7 +111,7 @@ export class AiBotService {
         case 'help':
           return {
             reply: [
-              '👋 Kenny commands:',
+              '👋 BambooBob Commands:',
               '- `!help` – show this list',
               '- `!rules` – channel rules',
               '- `!ping` – pong',

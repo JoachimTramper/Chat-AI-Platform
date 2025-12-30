@@ -1,14 +1,29 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import { Inter } from "next/font/google";
 import "./globals.css";
 
-const geistSans = localFont({
-  src: "./fonts/GeistVF.woff",
-  variable: "--font-geist-sans",
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  display: "swap",
 });
+
+const bondi = localFont({
+  src: "./fonts/Bondi.ttf",
+  variable: "--font-bondi",
+  display: "swap",
+});
+
 const geistMono = localFont({
   src: "./fonts/GeistMonoVF.woff",
   variable: "--font-geist-mono",
+});
+
+const inkFree = localFont({
+  src: "./fonts/InkFree.ttf",
+  variable: "--font-ink-free",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -18,12 +33,14 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable}`}>
+      <body
+        className={`${inter.variable} ${geistMono.variable} ${inkFree.variable} ${bondi.variable} font-sans`}
+      >
         {children}
       </body>
     </html>

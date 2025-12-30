@@ -86,20 +86,13 @@ export default function ChatPage() {
       });
   }, [router]);
 
-  // initial channels + active
+  // initial channels + active (read-only)
   useEffect(() => {
     (async () => {
       try {
         const items = await listChannelsWithUnread();
-        if (!items || items.length === 0) {
-          const c = await createChannel("general");
-          const next = await listChannelsWithUnread();
-          setChannels(mergeChannelsById([], next));
-          setActive(next[0]?.id ?? c.id);
-          return;
-        }
-        setChannels(mergeChannelsById([], items));
-        setActive(items[0]?.id ?? null);
+        setChannels(mergeChannelsById([], items ?? []));
+        setActive(items?.[0]?.id ?? null);
       } catch (e) {
         console.error("Failed to load channels with unread:", e);
       }
@@ -470,6 +463,7 @@ export default function ChatPage() {
             openDM={openDM}
             formatLastOnline={formatLastOnline}
             meId={user.sub}
+            isAdmin={user.role === "ADMIN"}
           />
         </div>
 

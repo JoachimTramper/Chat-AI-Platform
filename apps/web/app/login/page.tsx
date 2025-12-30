@@ -26,19 +26,28 @@ export default function LoginPage() {
   return (
     <div
       className="
-      min-h-dvh grid place-items-center p-6
+        min-h-dvh grid place-items-center p-6
 
-      /* MOBILE LOGIN BACKGROUND */
-      bg-[url('/BackgroundLoginMobile.png')]
-      bg-no-repeat bg-cover bg-center
+        bg-[url('/BackgroundLoginMobile.png')]
+        bg-no-repeat bg-cover
+        bg-[position:40%_50%]
 
-      /* DESKTOP LOGIN BACKGROUND */
-      md:bg-[url('/BackgroundLoginDesktop.png')]
-      md:bg-no-repeat md:bg-cover md:bg-center
-    "
+        md:bg-[url('/BackgroundLoginDesktop.png')]
+        md:bg-no-repeat md:bg-cover md:bg-center
+      "
     >
-      <div className="max-w-sm w-full space-y-4">
-        <h1 className="text-2xl font-semibold">Welcome</h1>
+      <div className="flex flex-col items-center gap-6">
+        <div className="flex flex-col items-center gap-1">
+          <img
+            src="/BambooBobLogo.png"
+            alt="Bamboo Bob"
+            className="w-48 md:w-64 lg:w-72"
+          />
+          <h1 className="font-ink text-3xl md:text-4xl font-bold text-center">
+            Welcome
+          </h1>
+        </div>
+
         <div className="space-y-2">
           <input
             className="border rounded w-full p-2"
@@ -62,16 +71,32 @@ export default function LoginPage() {
             />
           )}
         </div>
+
         {err && <p className="text-red-600 text-sm">{err}</p>}
+
         <button
           onClick={submit}
-          className="w-full border rounded p-2 hover:bg-gray-50"
+          className="
+            w-full
+            rounded-xl
+            p-3
+            bg-black
+            text-white
+            font-semibold
+            hover:bg-gray-500
+            active:scale-[0.98]
+            focus:outline-none
+            focus:ring-2
+            focus:ring-black/50
+            transition
+          "
         >
           {mode === "register" ? "Create account" : "Sign in"}
         </button>
+
         <button
           onClick={() => setMode(mode === "login" ? "register" : "login")}
-          className="text-sm underline"
+          className="text-sm underline w-full text-center"
         >
           {mode === "login" ? "Create an account" : "I already have an account"}
         </button>

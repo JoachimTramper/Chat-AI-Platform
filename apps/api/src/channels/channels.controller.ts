@@ -4,54 +4,62 @@ import {
   Get,
   Param,
   Post,
-  Req,
   UseGuards,
+  ForbiddenException,
 } from '@nestjs/common';
 import { ChannelsService } from './channels.service';
+import { UsersService } from '../users/users.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { User } from '../auth/decorators/user.decorator';
 
 @Controller('channels')
 export class ChannelsController {
-  constructor(private svc: ChannelsService) {}
+  constructor(
+    private svc: ChannelsService,
+    private users: UsersService,
+  ) {}
 
-  // === Public channels ===
+  // === My channels ===
+  @UseGuards(JwtAuthGuard)
   @Get()
-  list() {
-    return this.svc.list();
+  list(@User() user: any) {
+    return this.svc.list(user.sub);
   }
 
+  // === Create channel (admin only) ===
+  @UseGuards(JwtAuthGuard)
   @Post()
-  create(@Body('name') name: string) {
+  async create(@User() user: any, @Body('name') name: string) {
+    const isAdmin = await this.users.isAdmin(user.sub);
+    if (!isAdmin) {
+      throw new ForbiddenException('Admins only');
+    }
     return this.svc.create(name);
   }
 
   // === Unread / Read ===
   @UseGuards(JwtAuthGuard)
   @Post(':id/read')
-  async markRead(@Req() req: any, @Param('id') id: string) {
-    const meId = req.user.sub;
-    return this.svc.markRead(meId, id);
+  markRead(@User() user: any, @Param('id') id: string) {
+    return this.svc.markRead(user.sub, id);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get('with-unread')
-  async listWithUnread(@Req() req: any) {
-    const meId = req.user.sub;
-    return this.svc.listWithUnread(meId);
+  listWithUnread(@User() user: any) {
+    return this.svc.listWithUnread(user.sub);
   }
 
   // === Direct messages ===
   @UseGuards(JwtAuthGuard)
   @Get('direct')
-  async listMyDirects(@Req() req: any) {
-    const meId = req.user.sub;
-    return this.svc.listMyDirectChannels(meId);
+  listMyDirects(@User() user: any) {
+    return this.svc.listMyDirectChannels(user.sub);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get('direct/:userId')
-  async getOrCreateDirect(@Req() req: any, @Param('userId') userId: string) {
-    const meId = req.user.sub;
-    return this.svc.getOrCreateDirectChannel(meId, userId);
+  getOrCreateDirect(@User() user: any, @Param('userId') userId: string) {
+    return this.svc.getOrCreateDirectChannel(user.sub, userId);
   }
 }

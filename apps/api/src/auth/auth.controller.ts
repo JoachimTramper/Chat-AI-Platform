@@ -9,6 +9,7 @@ import {
   UseGuards,
   UploadedFile,
   UseInterceptors,
+  Query,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
@@ -58,6 +59,12 @@ export class AuthController {
     return this.auth.refresh(token);
   }
 
+  @Throttle({ default: { limit: 20, ttl: 60 } })
+  @Get('verify-email')
+  verifyEmail(@Query('token') token: string) {
+    return this.auth.verifyEmail(token);
+  }
+
   @SkipThrottle()
   @UseGuards(AuthGuard('jwt'))
   @Get('me')
@@ -69,6 +76,8 @@ export class AuthController {
         email: true,
         displayName: true,
         avatarUrl: true,
+        emailVerifiedAt: true,
+        role: true,
       },
     });
 
@@ -77,6 +86,8 @@ export class AuthController {
       email: dbUser?.email,
       displayName: dbUser?.displayName,
       avatarUrl: dbUser?.avatarUrl,
+      emailVerifiedAt: dbUser?.emailVerifiedAt,
+      role: dbUser?.role,
     };
   }
 

@@ -90,7 +90,7 @@ The platform includes an integrated AI assistant powered by **Groq LLMs**.
 
 ### Capabilities
 
-- Mention-based interaction (`@KennyTheKommunicator`)
+- Mention-based interaction (`@BambooBob`)
 - Natural language responses using Groq's OpenAI-compatible API
 - Context-aware replies using recent chat history
 - Rate-limited to prevent spam

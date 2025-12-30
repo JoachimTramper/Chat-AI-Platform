@@ -5,6 +5,7 @@ import type React from "react";
 import type { Message } from "../types";
 import { Avatar } from "./Avatar";
 import { resolveFileUrl } from "@/lib/files";
+import { MessageReactionsBar } from "./MessageReactionsBar";
 
 export function MessageItem({
   m,
@@ -89,6 +90,9 @@ export function MessageItem({
   const handlePointerLeave = () => {
     clearLongPress();
   };
+
+  const isShort = (m.content ?? "").trim().length <= 25;
+  const hasReactions = (m.reactions?.length ?? 0) > 0;
 
   return (
     <div
@@ -240,10 +244,10 @@ export function MessageItem({
               )}
 
               {/* wider on small screens, on sm+ again 80% */}
-              <div className="max-w-[92%] sm:max-w-[80%]">
+              <div className="max-w-[92%] sm:max-w-[80%] relative inline-block">
                 <div
                   className={`
-                    inline-flex items-center max-w-full
+                    inline-flex min-w-fit items-center max-w-full
                     text-sm whitespace-pre-wrap
                     px-3 py-2 rounded-2xl
                     transition-shadow
@@ -252,6 +256,32 @@ export function MessageItem({
                 >
                   {m.content}
                 </div>
+
+                {/* reactions pop-out (no extra space) */}
+                {!isDeleted && !m.failed && (
+                  <div
+                    className={
+                      isShort
+                        ? `mt-1 ${
+                            menuOpen || hasReactions
+                              ? "flex"
+                              : "hidden md:group-hover:flex"
+                          } justify-start`
+                        : `mt-1 ${
+                            menuOpen || hasReactions
+                              ? "flex"
+                              : "hidden md:group-hover:flex"
+                          } justify-end`
+                    }
+                  >
+                    <MessageReactionsBar
+                      message={m}
+                      meId={meId}
+                      channelId={channelId}
+                      forceShow={menuOpen}
+                    />
+                  </div>
+                )}
               </div>
             </div>
 

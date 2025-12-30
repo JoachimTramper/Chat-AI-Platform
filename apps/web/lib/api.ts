@@ -80,6 +80,8 @@ export type MeResponse = {
   email: string;
   displayName: string;
   avatarUrl: string | null;
+  emailVerifiedAt: string | null;
+  role: "USER" | "ADMIN";
 };
 
 export async function me() {

@@ -5,6 +5,7 @@ import { Avatar } from "./Avatar";
 import type { Me, ChannelWithUnread } from "../types";
 import { usePresence } from "../hooks/usePresence";
 import { Search, Menu, ChevronDown } from "lucide-react";
+import Link from "next/link";
 
 type DmPeer = {
   id: string;
@@ -115,7 +116,7 @@ export function ChatHeader({
 
   return (
     <header className="relative z-40 border-b border-neutral-300 md:border-b-0 bg-neutral-200 backdrop-blur-sm px-3 sm:px-4 py-2 flex items-center">
-      {/* Left side: menu + (later logo) */}
+      {/* Left side: menu + logo */}
       <div className="flex items-center gap-2 min-w-0">
         {/* mobile menu-button */}
         <button
@@ -127,7 +128,18 @@ export function ChatHeader({
           <Menu size={20} className="text-neutral-700" />
         </button>
 
-        {/* hier later je logo */}
+        {/* logo */}
+        <Link href="/chat" className="flex items-center gap-2 min-w-0">
+          <img
+            src="/LogoHeader.png"
+            alt="Bamboo Comms"
+            className="h-8 w-auto shrink-0"
+          />
+          {/* name next to logo (hidden on mobile) */}
+          <span className="hidden sm:inline font-bondi text-3xl font-medium tracking-wide text-neutral-800 truncate">
+            Bamboo Comms
+          </span>
+        </Link>
       </div>
 
       {/* Centered title (channel or DM) */}
