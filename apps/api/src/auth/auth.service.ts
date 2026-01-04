@@ -25,13 +25,53 @@ export class AuthService {
     private mail: MailService,
   ) {}
 
-  async register(email: string, password: string, displayName: string) {
-    const existing = await this.users.findByEmail(email);
+  private parseInviteCodes(raw?: string) {
+    if (!raw) return [];
+    return raw
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+
+  private isValidInviteCode(code?: string) {
+    if (!code) return false;
+    const allowed = this.parseInviteCodes(process.env.INVITE_CODE);
+    if (allowed.length === 0) return false;
+    return allowed.includes(code.trim());
+  }
+
+  async register(
+    email: string,
+    password: string,
+    displayName: string,
+    inviteCode?: string,
+  ) {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const existing = await this.users.findByEmail(normalizedEmail);
     if (existing) throw new BadRequestException('Email already in use');
 
     const hash = await bcrypt.hash(password, 12);
+
+    const bypassVerify = this.isValidInviteCode(inviteCode);
+
+    // Invite-bypass: direct verified, no email
+    if (bypassVerify) {
+      const user = await this.users.create({
+        email: normalizedEmail,
+        passwordHash: hash,
+        displayName,
+        emailVerifiedAt: new Date(),
+      });
+
+      await this.users.ensureGeneralMembership(user.id);
+
+      return { ok: true, bypassedEmailVerification: true };
+    }
+
+    // Normal flow: create + send verify email
     const user = await this.users.create({
-      email,
+      email: normalizedEmail,
       passwordHash: hash,
       displayName,
     });
@@ -49,7 +89,6 @@ export class AuthService {
     try {
       await this.mail.sendVerifyEmail(user.email, token);
     } catch (err) {
-      // cleanup zodat je niet stuck raakt met "Email already in use"
       await this.users.deleteEmailVerificationToken(user.id);
       await this.users.deleteUser(user.id);
       throw new BadRequestException('Failed to send verification email');
@@ -59,7 +98,7 @@ export class AuthService {
   }
 
   async login(email: string, password: string) {
-    const user = await this.users.findByEmail(email);
+    const user = await this.users.findByEmail(email.trim().toLowerCase());
     if (!user) throw new UnauthorizedException('Invalid credentials');
 
     const ok = await bcrypt.compare(password, user.passwordHash);
@@ -81,6 +120,7 @@ export class AuthService {
     if (!record) throw new BadRequestException('Invalid token');
     if (record.expiresAt < new Date())
       throw new BadRequestException('Token expired');
+
     if (record.user?.emailVerifiedAt) {
       await this.users.ensureGeneralMembership(record.userId);
       await this.users.deleteEmailVerificationToken(record.userId);
@@ -88,7 +128,6 @@ export class AuthService {
     }
 
     await this.users.markEmailVerified(record.userId);
-
     await this.users.ensureGeneralMembership(record.userId);
 
     // token opruimen

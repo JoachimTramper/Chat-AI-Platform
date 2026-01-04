@@ -41,10 +41,15 @@ export class AuthController {
     private usersService: UsersService,
   ) {}
 
-  @Throttle({ default: { limit: 3, ttl: 60 } })
+  @Throttle({ default: { limit: 4, ttl: 60 } })
   @Post('register')
   register(@Body() dto: RegisterDto) {
-    return this.auth.register(dto.email, dto.password, dto.displayName);
+    return this.auth.register(
+      dto.email,
+      dto.password,
+      dto.displayName,
+      dto.inviteCode,
+    );
   }
 
   @Throttle({ default: { limit: 5, ttl: 60 } })
@@ -80,6 +85,23 @@ export class AuthController {
         role: true,
       },
     });
+
+    if (dbUser?.id) {
+      const general = await this.prisma.channel.findFirst({
+        where: { name: 'general', isDirect: false },
+        select: {
+          id: true,
+          members: { where: { id: dbUser.id }, select: { id: true } },
+        },
+      });
+
+      if (general && general.members.length === 0) {
+        await this.prisma.channel.update({
+          where: { id: general.id },
+          data: { members: { connect: [{ id: dbUser.id }] } },
+        });
+      }
+    }
 
     return {
       sub: dbUser?.id,

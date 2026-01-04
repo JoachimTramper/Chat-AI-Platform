@@ -19,7 +19,12 @@ export class UsersService {
     return this.db.user.findUnique({ where: { id } });
   }
 
-  create(data: { email: string; passwordHash: string; displayName: string }) {
+  create(data: {
+    email: string;
+    passwordHash: string;
+    displayName: string;
+    emailVerifiedAt?: Date | null;
+  }) {
     return this.db.user.create({ data });
   }
 

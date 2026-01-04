@@ -10,12 +10,19 @@ export default function LoginPage() {
   const [mode, setMode] = useState<"login" | "register">("login");
   const [err, setErr] = useState<string | null>(null);
   const router = useRouter();
+  const [inviteCode, setInviteCode] = useState("");
 
   async function submit() {
     setErr(null);
     try {
-      if (mode === "register") await register(email, password, displayName);
-      else await login(email, password);
+      if (mode === "register") {
+        await register(email, password, displayName, inviteCode);
+        setMode("login");
+        return;
+      }
+
+      // login
+      await login(email, password);
       await me(); // smoke check
       router.push("/chat");
     } catch (e: any) {
@@ -63,12 +70,21 @@ export default function LoginPage() {
             onChange={(e) => setPassword(e.target.value)}
           />
           {mode === "register" && (
-            <input
-              className="border rounded w-full p-2"
-              placeholder="display name"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-            />
+            <>
+              <input
+                className="border rounded w-full p-2"
+                placeholder="display name"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+              />
+
+              <input
+                className="border rounded w-full p-2"
+                placeholder="Invite Code (Optional)"
+                value={inviteCode}
+                onChange={(e) => setInviteCode(e.target.value)}
+              />
+            </>
           )}
         </div>
 

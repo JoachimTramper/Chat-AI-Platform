@@ -58,12 +58,14 @@ api.interceptors.response.use(
 export async function register(
   email: string,
   password: string,
-  displayName: string
+  displayName: string,
+  inviteCode?: string
 ) {
   const { data } = await api.post("/auth/register", {
     email,
     password,
     displayName,
+    inviteCode: inviteCode?.trim() || undefined,
   });
   setToken(data.accessToken);
   return data;

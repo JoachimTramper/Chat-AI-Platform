@@ -33,6 +33,24 @@ export class ChannelsService {
     });
   }
 
+  // Ensure the user is a member of the "general" channel.
+  async ensureGeneralMembership(userId: string) {
+    const general = await this.prisma.channel.findFirst({
+      where: { name: 'general', isDirect: false },
+      select: {
+        id: true,
+        members: { where: { id: userId }, select: { id: true } },
+      },
+    });
+    if (!general) return;
+    if (general.members.length) return;
+
+    await this.prisma.channel.update({
+      where: { id: general.id },
+      data: { members: { connect: [{ id: userId }] } },
+    });
+  }
+
   // ===== UNREAD / READ =====
 
   // Mark channel as read up to latest message time (or now).
@@ -214,7 +232,7 @@ export class ChannelsService {
 
     const channel = await this.prisma.channel.create({
       data: {
-        name: 'Direct message',
+        name: `DM: ${other.displayName} (${otherUserId.slice(0, 6)})`,
         isDirect: true,
         dmKey: key,
         members: { connect: [{ id: meId }, { id: otherUserId }] },

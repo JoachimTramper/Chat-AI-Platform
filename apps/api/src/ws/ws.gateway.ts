@@ -166,6 +166,64 @@ export class WsGateway
     });
   }
 
+  private async getBotUserId() {
+    const bot = await this.prisma.user.findFirst({
+      where: { email: 'bot@ai.local' },
+      select: { id: true },
+    });
+    return bot?.id ?? null;
+  }
+
+  private async hasWelcomeMessage(
+    channelId: string,
+    userId: string,
+    botId: string,
+  ) {
+    const exists = await this.prisma.message.findFirst({
+      where: {
+        channelId,
+        authorId: botId,
+        content: { contains: `[welcome:${userId}]` },
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+    return !!exists;
+  }
+
+  private async postWelcome(channelId: string, userId: string, botId: string) {
+    const user = await this.getUserSafe(userId);
+    if (!user) return;
+
+    const msg = await this.prisma.message.create({
+      data: {
+        channelId,
+        authorId: botId,
+        content: `👋 Welcome ${user.displayName}! Type \`!help\` for commands. [welcome:${userId}]`,
+      },
+      select: {
+        id: true,
+        channelId: true,
+        content: true,
+        createdAt: true,
+        author: { select: { id: true, displayName: true, avatarUrl: true } },
+      },
+    });
+
+    // send realtime to everyone who has general open
+    this.server.to(`view:${channelId}`).emit('message.created', {
+      id: msg.id,
+      channelId: msg.channelId,
+      content: msg.content,
+      createdAt: msg.createdAt.toISOString(),
+      author: {
+        id: msg.author.id,
+        displayName: msg.author.displayName,
+        avatarUrl: msg.author.avatarUrl ?? null,
+      },
+    });
+  }
+
   private async broadcastPresenceUpdate(userId: string) {
     const user = await this.getUserSafe(userId);
     if (!user) return;
@@ -303,13 +361,24 @@ export class WsGateway
     // welcome logic only in general
     if (channelId !== GENERAL_CHANNEL_ID) return { ok: true };
 
+    // quick per-connection guard
     const key = `${channelId}:${u.sub}`;
     if (this.welcomed.has(key)) return { ok: true };
     this.welcomed.add(key);
 
-    this.server.to(`view:${channelId}`).emit('message.created', {
-      /* Welcome Payload */
-    });
+    // DB-guard (persists well after server restart)
+    const botId = await this.getBotUserId();
+    if (!botId) return { ok: true }; // no bot → no welcome
+
+    const alreadyWelcomed = await this.hasWelcomeMessage(
+      channelId,
+      u.sub,
+      botId,
+    );
+    if (!alreadyWelcomed) {
+      await this.postWelcome(channelId, u.sub, botId);
+    }
+
     return { ok: true };
   }
 
