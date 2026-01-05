@@ -17,8 +17,10 @@ async function bootstrap() {
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }),
   );
 
-  // Tijdelijk: staat alles toe. Later zetten we dit strak op je Vercel domain(s).
-  app.enableCors({ origin: true, credentials: true });
+  app.enableCors({
+    origin: ['https://bamboo-comms.vercel.app', 'http://localhost:3001'],
+    credentials: true,
+  });
 
   app.useStaticAssets(UPLOADS_DIR, {
     prefix: '/uploads',
