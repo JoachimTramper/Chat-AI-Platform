@@ -1,3 +1,3 @@
-const GENERAL_CHANNEL_ID = 'cmgt7gi3p0000vgxwr5hmxr90';
+const GENERAL_CHANNEL_ID = 'cmk12lals0000rx3842nhlmn0';
 
 export { GENERAL_CHANNEL_ID };
