@@ -21,10 +21,13 @@ import { UsersService } from '../users/users.service';
 
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
-import { extname } from 'path';
+import { extname, join } from 'path';
 import { Throttle, SkipThrottle } from '@nestjs/throttler';
+import { mkdirSync } from 'fs';
+import { UPLOADS_DIR } from '../uploads/uploads.constants';
 
-const AVATAR_DEST = './uploads/avatars';
+const AVATAR_DEST = join(UPLOADS_DIR, 'avatars');
+mkdirSync(AVATAR_DEST, { recursive: true });
 
 const AVATAR_ALLOWED = new Set([
   'image/jpeg',
