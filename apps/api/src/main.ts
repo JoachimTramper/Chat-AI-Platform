@@ -10,6 +10,9 @@ import { AppModule } from './app.module';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { UPLOADS_DIR } from './uploads/uploads.constants';
 
+import { existsSync, mkdirSync, copyFileSync } from 'fs';
+import { join } from 'path';
+
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
@@ -26,6 +29,27 @@ async function bootstrap() {
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     next();
   });
+
+  // Ensure BambooBob avatar exists in the persistent uploads volume
+  const avatarsDir = join(UPLOADS_DIR, 'avatars');
+  mkdirSync(avatarsDir, { recursive: true });
+
+  const botTarget = join(avatarsDir, 'bamboobob.png');
+  const botSource = join(
+    process.cwd(),
+    'apps',
+    'api',
+    'src',
+    'assets',
+    'bamboobob.png',
+  );
+
+  if (!existsSync(botTarget) && existsSync(botSource)) {
+    copyFileSync(botSource, botTarget);
+    console.log('Copied BambooBob avatar to', botTarget);
+  } else if (!existsSync(botSource)) {
+    console.warn('BambooBob avatar source missing at', botSource);
+  }
 
   app.useStaticAssets(UPLOADS_DIR, { prefix: '/uploads' });
 
