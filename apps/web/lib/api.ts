@@ -84,6 +84,12 @@ export type MeResponse = {
   avatarUrl: string | null;
   emailVerifiedAt: string | null;
   role: "USER" | "ADMIN";
+
+  bot?: {
+    id: string;
+    displayName: string;
+    avatarUrl: string | null;
+  } | null;
 };
 
 export async function me() {

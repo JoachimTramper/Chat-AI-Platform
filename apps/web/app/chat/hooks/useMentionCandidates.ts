@@ -2,7 +2,6 @@
 
 import { useMemo } from "react";
 import type { ChannelWithUnread, Me, OnlineUser } from "../types";
-import { AI_BOT_USER_ID, AI_BOT_NAME } from "../bot/ai-bot.constants";
 
 type MentionCandidate = { id: string; displayName: string };
 
@@ -41,8 +40,12 @@ export function useMentionCandidates({
     const isDirect = !!activeChannel?.isDirect;
 
     // bot mentionable in channels only (not DMs), self never
+    const bot = user?.bot ?? null;
+
     const withBot: MentionCandidate[] = [
-      ...(isDirect ? [] : [{ id: AI_BOT_USER_ID, displayName: AI_BOT_NAME }]),
+      ...(isDirect || !bot
+        ? []
+        : [{ id: bot.id, displayName: bot.displayName }]),
       ...base.filter((c) => c.id !== myId),
     ];
 

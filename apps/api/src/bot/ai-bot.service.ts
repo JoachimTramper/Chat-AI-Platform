@@ -1,7 +1,7 @@
 // apps/api/src/bot/ai-bot.service.ts
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { AI_BOT_USER_ID, AI_BOT_NAME } from './ai-bot.constants';
+import { AI_BOT_NAME } from './ai-bot.constants';
 import { parseBotIntent, resolveBotMode } from './ai-bot.intent';
 import { formatHistoryLine } from './ai-bot.format';
 import { DigestService } from '../digest/digest.service';
@@ -61,6 +61,14 @@ export class AiBotService {
     'Use 3–6 bullet points. Keep it concise.',
   ].join(' ');
 
+  private async getBotUserId() {
+    const bot = await this.prisma.user.findFirst({
+      where: { email: 'bot@ai.local' },
+      select: { id: true },
+    });
+    return bot?.id ?? null;
+  }
+
   private readonly logger = new Logger(AiBotService.name);
 
   private readonly throttle = new Map<string, number>();
@@ -101,7 +109,8 @@ export class AiBotService {
       payload.lastReadOverride ?? payload.lastRead ?? null;
 
     if (!text) return null;
-    if (payload.authorId === AI_BOT_USER_ID) return null;
+    const botId = await this.getBotUserId();
+    if (botId && payload.authorId === botId) return null;
 
     // 1) Commands via "!"
     if (text.startsWith('!')) {
@@ -336,12 +345,14 @@ export class AiBotService {
     const now = new Date();
     const from = new Date(now.getTime() - hours * 60 * 60 * 1000);
 
+    const botId = await this.getBotUserId();
+
     const context = await this.prisma.message.findMany({
       where: {
         channelId,
         deletedAt: null,
         createdAt: { gte: from, lte: now },
-        NOT: { authorId: AI_BOT_USER_ID },
+        ...(botId ? { NOT: { authorId: botId } } : {}),
       },
       orderBy: { createdAt: 'asc' },
       take: 200,

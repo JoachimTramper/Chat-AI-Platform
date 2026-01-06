@@ -106,6 +106,11 @@ export class AuthController {
       }
     }
 
+    const bot = await this.prisma.user.findFirst({
+      where: { email: 'bot@ai.local' },
+      select: { id: true, displayName: true, avatarUrl: true },
+    });
+
     return {
       sub: dbUser?.id,
       email: dbUser?.email,
@@ -113,6 +118,7 @@ export class AuthController {
       avatarUrl: dbUser?.avatarUrl,
       emailVerifiedAt: dbUser?.emailVerifiedAt,
       role: dbUser?.role,
+      bot: bot ?? null,
     };
   }
 
