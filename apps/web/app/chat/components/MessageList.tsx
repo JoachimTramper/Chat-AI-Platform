@@ -122,7 +122,7 @@ export function MessageList({
     <div
       ref={listRef}
       onScroll={onScroll}
-      className="flex-1 overflow-auto py-4"
+      className="flex-1 overflow-auto pt-0 pb-4 md:py-4"
     >
       <div
         className={
@@ -165,7 +165,7 @@ export function MessageList({
             return (
               <div key={m.id}>
                 {showDayDivider && (
-                  <div className="my-4 flex items-center gap-3">
+                  <div className="-mt-0 my-2 md:my-4 flex items-center gap-3">
                     <div className="h-px flex-1 bg-neutral-300/70" />
                     <div className="text-[11px] px-2 py-1 rounded-full bg-white/70 border border-neutral-300 text-neutral-700">
                       {formatDayLabel(m.createdAt)}

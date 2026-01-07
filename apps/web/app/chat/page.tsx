@@ -32,6 +32,7 @@ import { Sidebar } from "./components/Sidebar";
 import { ChatHeader } from "./components/ChatHeader";
 import { TypingIndicator } from "./components/TypingIndicator";
 import { SearchModal } from "./components/SearchModal";
+import { MobileChatTitleBubble } from "./components/MobileChatTitleBubble";
 
 import { useMessages } from "./hooks/useMessages";
 import { useTyping } from "./hooks/useTyping";
@@ -483,32 +484,41 @@ export default function ChatPage() {
             md:shadow-[inset_0_1px_0_rgba(255,255,255,0.4)]
           "
         >
-          {/* Messages */}
-          <div className="flex-1 min-h-0 flex flex-col">
-            <MessageList
-              msgs={msgs}
-              meId={user.sub}
-              channelId={active!}
-              listRef={listRef}
-              editingId={editingId}
-              editText={editText}
-              setEditText={setEditText}
-              onStartEdit={(m) => startEdit(m)}
-              onSaveEdit={(m) => active && saveEdit(active, m.id)}
-              onCancelEdit={cancelEdit}
-              onDelete={(m) => active && removeMessage(active, m.id)}
-              onReply={(m) => handleReply(m)}
-              formatDateTime={formatDateTime}
-              onScroll={handleScroll}
-              isDirect={activeChannel?.isDirect ?? false}
-              lastReadMessageIdByOthers={lastReadMessageIdByOthers}
-              scrollToMessageId={scrollToMessageId}
-              onScrolledToMessage={() => setScrollToMessageId(null)}
-              loadingOlder={loadingOlder}
-              onRetrySend={retrySend}
-            />
+          {/* Scroll area (messages) */}
+          <div className="flex-1 min-h-0 relative">
+            {/* MOBILE ONLY: overlay title bubble */}
+            <div className="md:hidden absolute top-0 left-0 right-0 z-30">
+              <MobileChatTitleBubble
+                activeChannel={activeChannel}
+                dmPeer={dmPeer}
+              />
+            </div>
+            {/* Messages scroll behind it */}
+            <div className="h-full overflow-y-auto pt-16 md:pt-0">
+              <MessageList
+                msgs={msgs}
+                meId={user.sub}
+                channelId={active!}
+                listRef={listRef}
+                editingId={editingId}
+                editText={editText}
+                setEditText={setEditText}
+                onStartEdit={(m) => startEdit(m)}
+                onSaveEdit={(m) => active && saveEdit(active, m.id)}
+                onCancelEdit={cancelEdit}
+                onDelete={(m) => active && removeMessage(active, m.id)}
+                onReply={(m) => handleReply(m)}
+                formatDateTime={formatDateTime}
+                onScroll={handleScroll}
+                isDirect={activeChannel?.isDirect ?? false}
+                lastReadMessageIdByOthers={lastReadMessageIdByOthers}
+                scrollToMessageId={scrollToMessageId}
+                onScrolledToMessage={() => setScrollToMessageId(null)}
+                loadingOlder={loadingOlder}
+                onRetrySend={retrySend}
+              />
+            </div>
           </div>
-
           {/* Sticky footer: typing + composer */}
           <div className="sticky bottom-0 z-20">
             <TypingIndicator label={typingLabel} />

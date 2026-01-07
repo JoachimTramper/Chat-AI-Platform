@@ -55,6 +55,7 @@ export function MessageItem({
 
   const [menuOpen, setMenuOpen] = useState(false);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isTouchPointer = (e: React.PointerEvent) => e.pointerType === "touch";
   const isDmMine = isDirect && isMe;
 
   const openMenu = () => {
@@ -64,11 +65,8 @@ export function MessageItem({
 
   const closeMenu = () => setMenuOpen(false);
 
-  const handleContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    openMenu();
-  };
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isTouchPointer(e)) return;
     if (e.button !== 0) return;
 
     longPressTimer.current = setTimeout(() => {
@@ -83,15 +81,16 @@ export function MessageItem({
     }
   };
 
-  const handlePointerUp = () => {
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (!isTouchPointer(e)) return;
     clearLongPress();
   };
 
-  const handlePointerLeave = () => {
+  const handlePointerLeave = (e: React.PointerEvent) => {
+    if (!isTouchPointer(e)) return;
     clearLongPress();
   };
 
-  const isShort = (m.content ?? "").trim().length <= 25;
   const hasReactions = (m.reactions?.length ?? 0) > 0;
 
   return (
@@ -257,22 +256,14 @@ export function MessageItem({
                   {m.content}
                 </div>
 
-                {/* reactions pop-out (no extra space) */}
+                {/* reactions: always left-aligned, anchored to bubble */}
                 {!isDeleted && !m.failed && (
                   <div
-                    className={
-                      isShort
-                        ? `mt-1 ${
-                            menuOpen || hasReactions
-                              ? "flex"
-                              : "hidden md:group-hover:flex"
-                          } justify-start`
-                        : `mt-1 ${
-                            menuOpen || hasReactions
-                              ? "flex"
-                              : "hidden md:group-hover:flex"
-                          } justify-end`
-                    }
+                    className={[
+                      menuOpen || hasReactions
+                        ? "mt-[2px] flex"
+                        : "hidden md:group-hover:flex md:mt-[2px]",
+                    ].join(" ")}
                   >
                     <MessageReactionsBar
                       message={m}
@@ -348,7 +339,7 @@ export function MessageItem({
                 {/* Desktop: hover actions */}
                 <div
                   className={`
-                    mt-1 hidden gap-2 text-xs text-gray-500 md:group-hover:flex
+                    mt-0 hidden gap-2 text-xs text-gray-500 md:group-hover:flex
                     ${isDmMine ? "justify-end" : ""}
                   `}
                 >
@@ -367,11 +358,12 @@ export function MessageItem({
                   </button>
                 </div>
 
-                {/* Context / long-press menu (mobile + right-click) */}
+                {/* Context / long-press menu (mobile only) */}
                 {menuOpen && (
                   <div
                     className="
-                      mt-1 inline-flex gap-2 text-xs text-gray-700 bg-white border rounded shadow px-2 py-1 z-10
+                      md:hidden
+                      mt-0 inline-flex gap-2 text-xs text-gray-700 bg-white border rounded shadow px-2 py-1 z-10
                       transition-all duration-150 origin-top-left
                       animate-[fadeInScale_150ms_ease-out]
                     "
@@ -398,6 +390,7 @@ export function MessageItem({
                         </button>
                       </>
                     )}
+
                     <button
                       className="hover:underline"
                       onClick={() => {
@@ -407,6 +400,7 @@ export function MessageItem({
                     >
                       Reply
                     </button>
+
                     <button
                       className="hover:underline text-gray-400"
                       onClick={closeMenu}

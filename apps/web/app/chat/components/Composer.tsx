@@ -168,7 +168,7 @@ export function Composer({
               <button
                 type="button"
                 onClick={onCancelReply}
-                className="mt-1 text-[11px] text-neutral-500 hover:text-neutral-700 underline"
+                className="text-[11px] text-neutral-500 hover:text-neutral-700 underline"
               >
                 Cancel reply
               </button>

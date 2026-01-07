@@ -11,6 +11,7 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
+    "@floating-ui/react-dom": "^2.1.6",
     "@repo/ui": "workspace:*",
     "axios": "^1.12.2",
     "emoji-picker-react": "^4.16.1",
