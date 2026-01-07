@@ -1,10 +1,22 @@
 import { PrismaClient, Role } from '@prisma/client';
+import { existsSync, mkdirSync, copyFileSync } from 'fs';
+import { join } from 'path';
 
 const prisma = new PrismaClient();
 
 const BOT_EMAIL = 'bot@ai.local';
 const BOT_AVATAR = '/uploads/avatars/bamboobob.png';
 const BOT_NAME = 'BambooBob';
+
+const BOT_AVATAR_FILENAME = 'bamboobob.png';
+
+// Source in repo: apps/api/prisma/assets/bamboobob.png
+const BOT_AVATAR_SRC = join(__dirname, 'assets', BOT_AVATAR_FILENAME);
+
+// Destination on Railway volume: /app/apps/api/uploads/avatars/bamboobob.png (via process.cwd())
+const UPLOADS_DIR = join(process.cwd(), 'uploads');
+const AVATARS_DIR = join(UPLOADS_DIR, 'avatars');
+const BOT_AVATAR_DEST = join(AVATARS_DIR, BOT_AVATAR_FILENAME);
 
 function parseAdminEmails(raw?: string) {
   if (!raw) return [];
@@ -32,7 +44,21 @@ async function main() {
     console.log('Channel "general" already exists.');
   }
 
-  // 2) Ensure bot user exists + avatar
+  // 2) Ensure bot avatar file exists on disk (uploads volume)
+  mkdirSync(AVATARS_DIR, { recursive: true });
+
+  if (!existsSync(BOT_AVATAR_DEST)) {
+    if (!existsSync(BOT_AVATAR_SRC)) {
+      console.warn(`[seed] Bot avatar source missing: ${BOT_AVATAR_SRC}`);
+    } else {
+      copyFileSync(BOT_AVATAR_SRC, BOT_AVATAR_DEST);
+      console.log(`[seed] Copied bot avatar → ${BOT_AVATAR_DEST}`);
+    }
+  } else {
+    console.log(`[seed] Bot avatar already present → ${BOT_AVATAR_DEST}`);
+  }
+
+  // 2a) Ensure bot user exists + avatar
   await prisma.user.upsert({
     where: { email: BOT_EMAIL },
     update: {
