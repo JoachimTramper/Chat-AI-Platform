@@ -21,7 +21,11 @@ async function bootstrap() {
   );
 
   app.enableCors({
-    origin: ['https://bamboo-comms.vercel.app', 'http://localhost:3001'],
+    origin: [
+      'https://bamboo-comms.vercel.app',
+      'https://bamboo-comms.joachimtramper.dev',
+      'http://localhost:3001',
+    ],
     credentials: true,
   });
 
