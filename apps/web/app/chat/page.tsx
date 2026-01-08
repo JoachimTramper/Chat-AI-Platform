@@ -494,7 +494,7 @@ export default function ChatPage() {
               />
             </div>
             {/* Messages scroll behind it */}
-            <div className="h-full pt-16 md:pt-0">
+            <div className="h-full pt-16 md:pt-0 flex flex-col">
               <MessageList
                 msgs={msgs}
                 meId={user.sub}
