@@ -440,7 +440,7 @@ export default function ChatPage() {
         {/* Sidebar */}
         <div
           className={`
-            fixed inset-y-0 left-0 z-50 w-64 bg-neutral-200
+            absolute inset-y-0 left-0 z-50 w-64 bg-neutral-200
             transform transition-transform duration-200 ease-out
             ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
             md:static md:translate-x-0 md:w-72 md:bg-neutral-200 md:h-full md:block
@@ -471,7 +471,7 @@ export default function ChatPage() {
         {/* Main */}
         <main
           className="
-            flex-1 flex flex-col min-h-0
+            flex-1 flex flex-col min-h-0 min-w-0
             bg-[url('/BackgroundMessages.png')]
             bg-repeat
             bg-[length:350px_350px]

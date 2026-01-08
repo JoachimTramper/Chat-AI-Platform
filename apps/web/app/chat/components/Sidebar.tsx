@@ -66,14 +66,7 @@ export function Sidebar({
   }
 
   return (
-    <aside
-      className="
-      overflow-auto min-h-0
-      pt-3 pb-3
-      pl-[calc(0.75rem+env(safe-area-inset-left))]
-      pr-[calc(0.75rem+env(safe-area-inset-right))]
-    "
-    >
+    <aside className="p-3 overflow-auto min-h-0">
       {/* Channels + DMs */}
       <div className="space-y-3">
         {/* Channels */}

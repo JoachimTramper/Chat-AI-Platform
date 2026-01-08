@@ -199,7 +199,7 @@ export class WsGateway
       data: {
         channelId,
         authorId: botId,
-        content: `👋 Welcome ${user.displayName}! Type \`!help\` for commands. [welcome:${userId}]`,
+        content: `👋 Welcome ${user.displayName}! Type \`!help\` for commands. [welcome: ${userId}]`,
       },
       select: {
         id: true,
