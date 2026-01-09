@@ -265,11 +265,17 @@ export function Composer({
         <button
           className="
             inline-flex items-center justify-center h-9 px-3 rounded-full text-sm font-medium
-            bg-indigo-600 text-white border border-transparent
+            bg-indigo-600 text-white
+            border border-indigo-600
+            shadow-md
             shadow-sm hover:bg-indigo-500 hover:shadow-md
             transition-colors transition-shadow
             focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2
-            disabled:opacity-70 disabled:cursor-not-allowed
+            disabled:bg-violet-500
+            disabled:text-white
+            disabled:border-violet-500
+            disabled:shadow-none
+            disabled:cursor-not-allowed
           "
           disabled={!canSend}
           onClick={handleSendClick}

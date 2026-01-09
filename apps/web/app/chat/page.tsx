@@ -472,6 +472,7 @@ export default function ChatPage() {
         <main
           className="
             flex-1 flex flex-col min-h-0 min-w-0
+            relative
             bg-[url('/BackgroundMessages.png')]
             bg-repeat
             bg-[length:350px_350px]
@@ -485,9 +486,9 @@ export default function ChatPage() {
           "
         >
           {/* Scroll area (messages) */}
-          <div className="flex-1 min-h-0 relative">
+          <div className="flex-1 min-h-0 relative z-20">
             {/* MOBILE ONLY: overlay title bubble */}
-            <div className="md:hidden absolute top-0 left-0 right-0 z-30">
+            <div className="md:hidden absolute top-0 left-0 right-0 z-40">
               <MobileChatTitleBubble
                 activeChannel={activeChannel}
                 dmPeer={dmPeer}
@@ -519,8 +520,8 @@ export default function ChatPage() {
               />
             </div>
           </div>
-          {/* Sticky footer: typing + composer */}
-          <div className="sticky bottom-0 z-20">
+          {/* Composer controls overlay */}
+          <div className="absolute bottom-0 left-0 right-0 z-30">
             <TypingIndicator label={typingLabel} />
             <Composer
               value={text}

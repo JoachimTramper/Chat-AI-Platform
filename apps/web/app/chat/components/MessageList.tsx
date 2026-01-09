@@ -122,13 +122,13 @@ export function MessageList({
     <div
       ref={listRef}
       onScroll={onScroll}
-      className="flex-1 overflow-auto pt-16 pb-28 md:pt-4 md:pb-6"
+      className="flex-1 overflow-auto pt-16 md:pt-4 pb-28"
     >
       <div
         className={
           isDirect
-            ? "w-full space-y-1 px-3 sm:px-6 lg:px-[10vw] xl:px-[15vw]"
-            : "w-full space-y-1 px-3 sm:px-4 lg:px-6"
+            ? "w-full space-y-1 px-2 sm:px-6 lg:px-[10vw] xl:px-[15vw]"
+            : "w-full space-y-1 px-2 sm:px-4 lg:px-6"
         }
       >
         {/* Loading older messages-indicator */}
