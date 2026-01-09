@@ -122,7 +122,7 @@ export function MessageList({
     <div
       ref={listRef}
       onScroll={onScroll}
-      className="flex-1 overflow-auto pt-16 md:pt-4 pb-28"
+      className="flex-1 overflow-auto pt-16 md:pt-4 pb-20"
     >
       <div
         className={
